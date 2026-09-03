@@ -1,0 +1,200 @@
+# Smriti Raj Dentistry — Patient-Specific QR Offer Management System
+
+A local FastAPI + SQLite prototype for campaign registrations and patient-specific complimentary offers.
+
+## Offers
+1. Free In-House Zirconia Crown
+2. Free In-House Aligner Scan
+
+Each registration creates:
+- a patient record
+- exactly one selected offer
+- a unique opaque `SRD-...` secure token
+- a unique QR image
+- a 10-day server-time expiry
+- a one-time-use state stored in the database
+
+The QR payload contains only the secure token; patient information is not embedded in the QR.
+
+## Windows setup
+
+Open PowerShell in this project folder:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\activate
+py -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Generate secure centralized-login values:
+
+```powershell
+py scripts/create_clinic_credentials.py
+```
+
+Copy the generated values into `.env`. Never commit `.env` or paste the real password into source code or chat.
+
+Then run:
+
+```powershell
+py -m uvicorn app.main:app --reload
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+API docs:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## Centralized clinic login
+
+The default username is `smritiraj-clinic`; it can be changed with `CLINIC_USERNAME`. The application accepts only an Argon2 password hash from `CLINIC_PASSWORD_HASH` and refuses to start when the hash or session secret is missing. Production also requires HTTPS-only session cookies.
+
+## Development seed data
+
+After the app has been started at least once:
+
+```powershell
+py seed.py
+```
+
+This adds clearly marked development test data:
+- Rahul Sharma — Zirconia Crown
+- Amit Kumar — Aligner Scan
+- Neha Singh — Zirconia Crown
+
+## Complete workflow test
+
+1. Log in.
+2. Click **Register Patient**.
+3. Enter the patient information.
+4. Select exactly one offer.
+5. Click **REGISTER PATIENT & GENERATE QR**.
+6. The system stores the patient and offer and generates a unique QR.
+7. Download or print the QR.
+8. Go to **Scan / Validate QR**.
+9. Use the camera scanner where supported, or paste/type the token printed/generated for the QR.
+10. A valid active QR displays the patient and offer to the authenticated clinic user.
+11. Click **REDEEM OFFER** and confirm.
+12. Scan/validate the same token again. It must show **OFFER ALREADY USED**.
+13. Search the patient in **Patients**.
+14. Check **Offers** for the QR status.
+
+## Security behavior
+
+- QR contains only an opaque cryptographically random token.
+- Patient name, mobile, email, age, etc. are never placed into the QR payload.
+- Validation is always server-side against SQLite.
+- Server-side UTC time controls the 10-day validity window.
+- Redemption uses a conditional database update requiring `status = ACTIVE` and `expires_at > now`.
+- Therefore, two simultaneous redemption requests cannot both transition the same coupon from ACTIVE to REDEEMED.
+- Secrets are loaded from environment variables and are not hard-coded into source.
+
+## Email
+
+Local prototype mode prepares/logs the intended email data and QR file; it does not require an email provider.
+
+Later, configure:
+
+```text
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM=
+```
+
+No SMTP credentials should be committed to source control.
+
+## WhatsApp
+
+The prototype does not use unofficial automation. It creates a prefilled `wa.me` link and records the action as prepared.
+
+For production, replace `app/whatsapp_service.py` with the official WhatsApp Business Cloud API integration and keep credentials in environment variables.
+
+## Important local-network note
+
+`127.0.0.1` works only on the same computer. If you want a phone/tablet at a campaign to access the local server over Wi-Fi, bind Uvicorn to the computer's LAN interface and use the computer's LAN IP as `PUBLIC_BASE_URL`. The QR in this prototype contains only the opaque token, so camera scanning can also be used as a token input.
+
+## Tests
+
+Run:
+
+```powershell
+py -m pytest -q
+```
+
+## Database migrations
+
+Local development may create SQLite tables automatically for convenience. Staging and production never create tables at application startup; apply Alembic migrations first:
+
+```powershell
+py -m alembic upgrade head
+```
+
+Check that the models and migrations agree:
+
+```powershell
+py -m alembic check
+```
+
+## Railway deployment preparation
+
+The repository includes a non-root production `Dockerfile`, PostgreSQL support, Alembic migrations, `/health` liveness, and `/ready` database readiness. Follow `docs/deployment-railway.md` when the deployment step is approved. Do not deploy with real patient data before the security, backup, pipeline, and launch gates pass.
+
+The test suite covers:
+- registration
+- QR token creation
+- uniqueness
+- 10-day expiry
+- valid QR
+- invalid QR
+- redemption
+- second redemption
+- different offers
+- patient search
+
+## Project structure
+
+```text
+smritiraj_qr_system/
+├── app/
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   ├── models.py
+│   ├── schemas.py
+│   ├── auth.py
+│   ├── qr_service.py
+│   ├── coupon_service.py
+│   ├── email_service.py
+│   ├── whatsapp_service.py
+│   ├── audit_service.py
+│   ├── routes/
+│   │   ├── auth.py
+│   │   ├── dashboard.py
+│   │   ├── patients.py
+│   │   ├── coupons.py
+│   │   └── validation.py
+│   ├── templates/
+│   └── static/
+├── generated_qr/
+├── tests/
+├── .env.example
+├── .gitignore
+├── requirements.txt
+├── run.py
+├── seed.py
+└── README.md
+```
+
+## Production migration path
+
+The application is intentionally modular. SQLite can later be replaced with PostgreSQL by changing `DATABASE_URL`. SMTP and official WhatsApp Cloud API can be configured independently. Before public deployment, add HTTPS, stronger multi-user authentication/authorization, CSRF protection, rate limiting, encrypted backups, proper secrets management, and a privacy/retention policy appropriate for patient data.
