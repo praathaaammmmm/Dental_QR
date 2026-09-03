@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, Header, HTTPException
 
-from ..auth import require_auth
+from ..auth import require_admin
 from ..models import DeliveryLog, PatientOffer
 from ..config import N8N_WEBHOOK_SECRET
 
@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/redemptions")
 def redemptions(request: Request):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard:
         return guard
     db = request.app.state.db()
@@ -20,7 +20,7 @@ def redemptions(request: Request):
 
 @router.get("/delivery")
 def delivery(request: Request):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard:
         return guard
     db = request.app.state.db()

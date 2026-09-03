@@ -1,17 +1,14 @@
-from datetime import datetime
 import logging
-import base64
 from fastapi import APIRouter, Depends, Request, Form, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy import or_
-from ..auth import require_auth
+from ..auth import require_admin
 from ..audit_service import audit
-from ..models import Patient, PatientOffer, Offer, Campaign, DeliveryLog, AuditLog
+from ..models import Patient, PatientOffer, Offer, Campaign, AuditLog
 from ..security import require_csrf
 from ..time_utils import utc_now
-from ..n8n_service import trigger_delivery
 from ..services.registration_service import RegistrationError, register_patient_offer
-from ..config import HOSPITAL_NAME, QR_DIR
+from ..services.delivery_service import send_qr_delivery
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -19,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("/patients")
 def patients(request: Request, q: str = Query("", max_length=100), status: str = "", offer_id: int | None = None):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -40,7 +37,7 @@ def patients(request: Request, q: str = Query("", max_length=100), status: str =
 
 @router.get("/patients/register")
 def register_page(request: Request):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -66,7 +63,7 @@ def register_patient(
     consent_given: bool = Form(False),
     _csrf: None = Depends(require_csrf),
 ):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -91,7 +88,7 @@ def register_patient(
         db.close()
 @router.get("/patients/{patient_id}")
 def patient_detail(request: Request, patient_id: int):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -111,7 +108,7 @@ def cancel_coupon(
     reason: str = Form(..., min_length=3, max_length=255),
     _csrf: None = Depends(require_csrf),
 ):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -134,40 +131,36 @@ def cancel_coupon(
 
 @router.post("/patients/{patient_id}/delivery/email")
 def send_email(request: Request, patient_id: int, _csrf: None = Depends(require_csrf)):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
         patient = db.get(Patient, patient_id)
-        coupon = patient.offers[0]
-        if not patient.email:
-            return RedirectResponse(f"/patients/{patient_id}?message=No email address", status_code=303)
-        qr_path = QR_DIR / f"{coupon.coupon_uid}.png"
-        qr_b64 = base64.b64encode(qr_path.read_bytes()).decode("ascii") if qr_path.exists() else None
-        result = trigger_delivery({"event": "REGISTRATION_QR_DELIVERY", "channel": "EMAIL", "hospital": HOSPITAL_NAME, "registration_id": coupon.coupon_uid, "patient": {"name": patient.full_name, "email": patient.email, "phone": patient.mobile}, "service": coupon.offer.name, "campaign": coupon.campaign.name if coupon.campaign else patient.campaign_name, "expires_at": coupon.expires_at.isoformat(), "qr_base64_png": qr_b64})
-        db.add(DeliveryLog(coupon_id=coupon.id, channel="EMAIL", recipient=patient.email, status=result["status"], n8n_workflow_id=result.get("workflow_id"), failure_reason=result.get("reason")))
-        audit(db, "admin", "EMAIL_DELIVERY_TRIGGERED", coupon.id, patient.id, {"recipient": patient.email, "status": result["status"]})
-        db.commit()
+        coupon = max(patient.offers, key=lambda item: item.created_at) if patient and patient.offers else None
+        if not coupon:
+            return RedirectResponse(f"/patients/{patient_id}?message=No active registration", status_code=303)
+        try:
+            result = send_qr_delivery(db, patient, coupon, "EMAIL", request.session.get("user", "admin"))
+        except ValueError as exc:
+            return RedirectResponse(f"/patients/{patient_id}?message={exc}", status_code=303)
         return RedirectResponse(f"/patients/{patient_id}?message=Email delivery {result['status'].lower()}", status_code=303)
     finally:
         db.close()
 
 @router.post("/patients/{patient_id}/delivery/whatsapp")
 def whatsapp(request: Request, patient_id: int, _csrf: None = Depends(require_csrf)):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
         patient = db.get(Patient, patient_id)
-        coupon = patient.offers[0]
-        if not patient.mobile:
-            return RedirectResponse(f"/patients/{patient_id}?message=No phone number", status_code=303)
-        qr_path = QR_DIR / f"{coupon.coupon_uid}.png"
-        qr_b64 = base64.b64encode(qr_path.read_bytes()).decode("ascii") if qr_path.exists() else None
-        result = trigger_delivery({"event": "REGISTRATION_QR_DELIVERY", "channel": "WHATSAPP", "hospital": HOSPITAL_NAME, "registration_id": coupon.coupon_uid, "patient": {"name": patient.full_name, "email": patient.email, "phone": patient.mobile}, "service": coupon.offer.name, "campaign": coupon.campaign.name if coupon.campaign else patient.campaign_name, "expires_at": coupon.expires_at.isoformat(), "qr_base64_png": qr_b64})
-        db.add(DeliveryLog(coupon_id=coupon.id, channel="WHATSAPP", recipient=patient.mobile, status=result["status"], n8n_workflow_id=result.get("workflow_id"), failure_reason=result.get("reason")))
-        audit(db, "admin", "WHATSAPP_DELIVERY_TRIGGERED", coupon.id, patient.id, {"status": result["status"]})
-        db.commit()
+        coupon = max(patient.offers, key=lambda item: item.created_at) if patient and patient.offers else None
+        if not coupon:
+            return RedirectResponse(f"/patients/{patient_id}?message=No active registration", status_code=303)
+        try:
+            result = send_qr_delivery(db, patient, coupon, "WHATSAPP", request.session.get("user", "admin"))
+        except ValueError as exc:
+            return RedirectResponse(f"/patients/{patient_id}?message={exc}", status_code=303)
         return RedirectResponse(f"/patients/{patient_id}?message=WhatsApp delivery {result['status'].lower()}", status_code=303)
     finally:
         db.close()

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-head">
   <div><span class="eyebrow">SECURE VALIDATION</span><h1>Scan and validate QR</h1><p class="muted">Use the camera or enter the printed QR ID to verify an offer.</p></div>
-  <a class="text-link" href="/redemptions">View redemptions →</a>
+  {% if workspace != 'staff' %}<a class="text-link" href="/redemptions">View redemptions →</a>{% else %}<a class="text-link" href="{{ back_url|default('/staff/home') }}">← Back to workspace</a>{% endif %}
 </div>
 <div class="scanner-layout">
   <section class="card scanner-card">
@@ -15,7 +15,7 @@
   <section class="card manual-card">
     <span class="metric-icon mint">⌨</span><h2>Enter QR ID manually</h2>
     <p class="muted">Type the ID printed under the QR, such as <b>SRD-CBD80549</b>.</p>
-    <form method="post" action="/validate">
+    <form method="post" action="{{ form_action|default('/validate') }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}">
       <label>QR ID<input id="token" name="token" value="{{ token }}" placeholder="SRD-XXXXXXXX" autocomplete="off" required></label>
       <button class="primary btn full">Validate offer →</button>
@@ -30,7 +30,7 @@
   {% if result.kind == 'VALID' %}
     <span class="eyebrow">VALIDATION SUCCESSFUL</span><h2>OFFER VALID</h2><p>This QR is active and may be redeemed once.</p>
     <div class="result-details"><span><small>Patient</small><b>{{ result.coupon.patient.full_name }}</b></span><span><small>Offer</small><b>{{ result.coupon.offer.name }}</b></span><span><small>Expires</small><b>{{ result.coupon.expires_at|clinic_time('%d %b %Y') }}</b></span><span><small>Status</small><b class="badge active">ACTIVE</b></span></div>
-    <form method="post" action="/redeem/{{ result.coupon.id }}" onsubmit="return confirm('Redeem this offer? This cannot be undone.')"><input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}"><button class="danger btn">Redeem offer</button></form>
+    <form method="post" action="{{ redeem_url|default('/redeem/' ~ result.coupon.id) }}" onsubmit="return confirm('Redeem this offer? This cannot be undone.')"><input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}"><button class="danger btn">Redeem offer</button></form>
   {% elif result.kind == 'REDEEMED' %}
     <span class="eyebrow">REDEMPTION BLOCKED</span><h2>OFFER ALREADY USED</h2><p><b>{{ result.coupon.patient.full_name }}</b> used this offer on {{ result.coupon.redeemed_at|clinic_time('%d %b %Y, %I:%M %p') }} IST. This QR cannot be used again.</p>
   {% elif result.kind == 'EXPIRED' %}

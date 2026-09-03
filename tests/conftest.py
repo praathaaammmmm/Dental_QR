@@ -21,6 +21,9 @@ class CSRFTestClient(TestClient):
             page = super().get("/login", follow_redirects=True)
             match = CSRF_PATTERN.search(page.text)
             if not match:
+                page = super().get("/staff/home", follow_redirects=True)
+                match = CSRF_PATTERN.search(page.text)
+            if not match:
                 raise AssertionError("CSRF token was not rendered")
             data = dict(data or {})
             data.setdefault("_csrf_token", match.group(1))
