@@ -37,6 +37,7 @@ def login_page(request: Request):
     if request.session.get("user"):
         return RedirectResponse("/", status_code=303)
     return request.app.state.templates.TemplateResponse(
+        request,
         "login.html", {"request": request, "error": None}
     )
 
@@ -45,6 +46,7 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
     client_key = _client_key(request)
     if _is_rate_limited(client_key):
         return request.app.state.templates.TemplateResponse(
+            request,
             "login.html",
             {"request": request, "error": "Too many login attempts. Try again later."},
             status_code=429,
@@ -59,6 +61,7 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
         return RedirectResponse("/", status_code=303)
     _record_failure(client_key)
     return request.app.state.templates.TemplateResponse(
+        request,
         "login.html", {"request": request, "error": "Invalid password"}
     )
 

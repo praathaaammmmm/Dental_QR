@@ -2,6 +2,7 @@ from datetime import date, datetime
 from sqlalchemy import Boolean, Date, String, Integer, DateTime, ForeignKey, Text, Index, UniqueConstraint, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
+from .time_utils import utc_now
 
 class Patient(Base):
     __tablename__ = "patients"
@@ -19,7 +20,7 @@ class Patient(Base):
     consent_given: Mapped[bool] = mapped_column(Boolean, default=False)
     consent_version: Mapped[str] = mapped_column(String(20))
     consented_at: Mapped[datetime] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     offers = relationship("PatientOffer", back_populates="patient", cascade="all, delete-orphan")
 
@@ -34,7 +35,7 @@ class StaffUser(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20), default="staff", index=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 class Offer(Base):
     __tablename__ = "offers"
@@ -59,7 +60,7 @@ class Campaign(Base):
     end_date: Mapped[date] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), default="DRAFT", index=True)
     created_by: Mapped[str] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     offers = relationship("Offer", secondary=campaign_offers, back_populates="campaigns")
     registrations = relationship("PatientOffer", back_populates="campaign")
 
@@ -71,7 +72,7 @@ class PatientOffer(Base):
     offer_id: Mapped[int] = mapped_column(ForeignKey("offers.id"), index=True)
     campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True, index=True)
     secure_token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     status: Mapped[str] = mapped_column(String(20), default="ACTIVE", index=True)
     redeemed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -98,12 +99,12 @@ class DeliveryLog(Base):
     n8n_workflow_id: Mapped[str | None] = mapped_column(String(150), nullable=True)
     provider_message_id: Mapped[str | None] = mapped_column(String(150), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
     user: Mapped[str] = mapped_column(String(100))
     action: Mapped[str] = mapped_column(String(100))
     coupon_id: Mapped[int | None] = mapped_column(ForeignKey("patient_offers.id"), nullable=True)

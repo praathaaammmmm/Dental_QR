@@ -13,7 +13,7 @@ def offers(request: Request):
     db = request.app.state.db()
     try:
         rows = db.query(PatientOffer).order_by(PatientOffer.created_at.desc()).all()
-        return request.app.state.templates.TemplateResponse("offers.html", {"request": request, "rows": rows})
+        return request.app.state.templates.TemplateResponse(request, "offers.html", {"request": request, "rows": rows})
     finally:
         db.close()
 
@@ -60,6 +60,6 @@ def qr_print(request: Request, coupon_uid: str):
         coupon = db.query(PatientOffer).filter(PatientOffer.coupon_uid == coupon_uid).first()
         if not coupon:
             return RedirectResponse("/offers", status_code=303)
-        return request.app.state.templates.TemplateResponse("print_coupon.html", {"request": request, "coupon": coupon})
+        return request.app.state.templates.TemplateResponse(request, "print_coupon.html", {"request": request, "coupon": coupon})
     finally:
         db.close()

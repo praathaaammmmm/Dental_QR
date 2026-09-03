@@ -14,7 +14,7 @@ def redemptions(request: Request):
     db = request.app.state.db()
     try:
         rows = db.query(PatientOffer).filter(PatientOffer.status == "REDEEMED").order_by(PatientOffer.redeemed_at.desc()).all()
-        return request.app.state.templates.TemplateResponse("redemptions.html", {"request": request, "rows": rows})
+        return request.app.state.templates.TemplateResponse(request, "redemptions.html", {"request": request, "rows": rows})
     finally:
         db.close()
 
@@ -26,7 +26,7 @@ def delivery(request: Request):
     db = request.app.state.db()
     try:
         rows = db.query(DeliveryLog, PatientOffer).join(PatientOffer, DeliveryLog.coupon_id == PatientOffer.id).order_by(DeliveryLog.sent_at.desc()).all()
-        return request.app.state.templates.TemplateResponse("delivery.html", {"request": request, "rows": rows})
+        return request.app.state.templates.TemplateResponse(request, "delivery.html", {"request": request, "rows": rows})
     finally:
         db.close()
 

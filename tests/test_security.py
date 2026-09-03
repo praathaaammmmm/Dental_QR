@@ -32,15 +32,15 @@ def test_registration_rejects_invalid_contact_data(client):
 
 
 def test_registration_does_not_expose_internal_error(client, monkeypatch):
-    from app.routes import patients
+    from app.services import registration_service
 
     def fail_generation(*_args, **_kwargs):
         raise RuntimeError("SECRET INTERNAL FAILURE")
 
-    monkeypatch.setattr(patients, "generate_qr", fail_generation)
+    monkeypatch.setattr(registration_service, "generate_qr", fail_generation)
     response = client.post(
         "/patients/register",
-        data={"full_name": "Test Patient", "mobile": "9999999999", "offer_id": "1", "consent_given": "true"},
+        data={"full_name": "Test Patient", "mobile": "9999999999", "campaign_id": "1", "offer_id": "1", "consent_given": "true"},
     )
     assert response.status_code == 500
     assert "Registration could not be completed" in response.text

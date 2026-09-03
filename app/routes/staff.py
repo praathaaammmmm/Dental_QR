@@ -12,5 +12,5 @@ def staff_home(request: Request):
     try:
         campaigns = db.query(Campaign).filter(Campaign.status == "ACTIVE").order_by(Campaign.start_date.desc()).all()
         active_qrs = db.query(PatientOffer).filter(PatientOffer.status == "ACTIVE").count()
-        return request.app.state.templates.TemplateResponse("staff_home.html", {"request": request, "campaigns": campaigns, "active_qrs": active_qrs})
+        return request.app.state.templates.TemplateResponse(request, "staff_home.html", {"request": request, "campaigns": campaigns, "active_qrs": active_qrs})
     finally: db.close()
