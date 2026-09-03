@@ -2,7 +2,7 @@ import re
 from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
-from ..auth import require_auth
+from ..auth import require_admin
 from ..models import PatientOffer
 from ..coupon_service import refresh_expiry, redeem_atomic
 from ..audit_service import audit
@@ -33,7 +33,7 @@ def result_for(coupon):
 
 @router.get("/validate")
 def validate_page(request: Request):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -43,7 +43,7 @@ def validate_page(request: Request):
 
 @router.post("/validate")
 def validate_submit(request: Request, token: str = Form(...), _csrf: None = Depends(require_csrf)):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -63,7 +63,7 @@ def validate_submit(request: Request, token: str = Form(...), _csrf: None = Depe
 
 @router.get("/validate/result/{coupon_uid}")
 def validation_result(request: Request, coupon_uid: str):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -78,7 +78,7 @@ def validation_result(request: Request, coupon_uid: str):
 
 @router.post("/redeem/{coupon_id}")
 def redeem(request: Request, coupon_id: int, _csrf: None = Depends(require_csrf)):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:

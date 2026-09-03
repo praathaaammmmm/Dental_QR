@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, RedirectResponse
-from ..auth import require_auth
+from ..auth import require_admin, require_staff_or_admin
 from ..models import PatientOffer
 from ..qr_service import ensure_qr
 
@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/offers")
 def offers(request: Request):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -19,7 +19,7 @@ def offers(request: Request):
 
 @router.get("/qr/{coupon_uid}.png")
 def qr_image(request: Request, coupon_uid: str):
-    guard = require_auth(request)
+    guard = require_staff_or_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -36,7 +36,7 @@ def qr_image(request: Request, coupon_uid: str):
 
 @router.get("/qr/{coupon_uid}/download")
 def qr_download(request: Request, coupon_uid: str):
-    guard = require_auth(request)
+    guard = require_staff_or_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:
@@ -53,7 +53,7 @@ def qr_download(request: Request, coupon_uid: str):
 
 @router.get("/qr/{coupon_uid}/print")
 def qr_print(request: Request, coupon_uid: str):
-    guard = require_auth(request)
+    guard = require_staff_or_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:

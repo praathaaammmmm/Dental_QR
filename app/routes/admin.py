@@ -9,10 +9,9 @@ from ..models import Campaign, Offer, PatientOffer, DeliveryLog
 from ..security import require_csrf
 from ..audit_service import audit
 from ..models import StaffUser, AuditLog
-from argon2 import PasswordHasher
+from ..auth import password_hasher
 
 router = APIRouter(prefix="/admin")
-password_hasher = PasswordHasher()
 
 @router.get("/audit")
 def audit_log(request: Request):

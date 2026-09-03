@@ -1,20 +1,20 @@
 {% if coupon %}
 <section class="card delivery-card">
-  <div class="card-heading"><div><h2>Send confirmation</h2><p>Prepare the patient QR confirmation by email or WhatsApp.</p></div><a href="/delivery">Delivery activity →</a></div>
+  <div class="card-heading"><div><h2>Send confirmation</h2><p>Prepare the patient QR confirmation by email or WhatsApp.</p></div>{% if workspace != 'staff' %}<a href="/delivery">Delivery activity →</a>{% endif %}</div>
   <div class="delivery-actions">
     {% if patient.email %}
-    <form method="post" action="/patients/{{ patient.id }}/delivery/email">
+    <form method="post" action="{{ delivery_prefix|default('/patients/' ~ patient.id ~ '/delivery') }}/email">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}">
-      <button class="btn secondary" formaction="/patients/{{ patient.id }}/delivery/email">✉ Prepare email with QR</button>
+      <button class="btn secondary">✉ Prepare email with QR</button>
     </form>
     {% else %}<span class="disabled-action">No email address recorded</span>{% endif %}
-    <form method="post">
+    <form method="post" action="{{ delivery_prefix|default('/patients/' ~ patient.id ~ '/delivery') }}/whatsapp">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}">
-      <button class="btn secondary" formaction="/patients/{{ patient.id }}/delivery/whatsapp">◉ WhatsApp confirmation</button>
+      <button class="btn secondary">◉ WhatsApp confirmation</button>
     </form>
   </div>
 </section>
-{% if coupon.status == 'ACTIVE' %}
+{% if coupon.status == 'ACTIVE' and can_cancel|default(true) %}
 <section class="card danger-zone"><div><h2>Cancel active offer</h2><p>Cancellation immediately prevents QR redemption.</p></div><form method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}"><input name="reason" minlength="3" maxlength="255" placeholder="Cancellation reason" required><button class="btn danger" formaction="/patients/{{ patient.id }}/cancel">Cancel offer</button></form></section>
 {% endif %}
 {% endif %}

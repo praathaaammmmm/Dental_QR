@@ -1,8 +1,8 @@
 {% extends "base.html" %}{% block title %}CRM · Add Patient{% endblock %}{% block section_title %}CRM{% endblock %}
 {% block content %}
-<div class="page-head"><div><span class="eyebrow">CRM · NEW PATIENT</span><h1>Add patient</h1><p class="muted">Capture the patient profile, choose a service, and generate a secure one-time QR offer.</p></div><a class="text-link" href="/patients">← Back to CRM</a></div>
+<div class="page-head"><div><span class="eyebrow">{{ 'STAFF · NEW REGISTRATION' if workspace == 'staff' else 'CRM · NEW PATIENT' }}</span><h1>Add patient</h1><p class="muted">Capture the patient profile, choose a service, and generate a secure one-time QR offer.</p></div><a class="text-link" href="{{ back_url|default('/patients') }}">← Back</a></div>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
-<form class="registration-layout form" method="post" action="/patients/register">
+<form class="registration-layout form" method="post" action="{{ form_action|default('/patients/register') }}">
 <input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}">
 <div class="card registration-card"><div class="step-heading"><span>01</span><div><h2>Patient information</h2><p>Required details for this campaign registration.</p></div></div><div class="form-grid">
 <label class="span-2">Campaign *<select name="campaign_id" required><option value="">Select an active campaign</option>{% for c in campaigns %}<option value="{{c.id}}">{{c.name}} · {{c.start_date}} to {{c.end_date}}</option>{% endfor %}</select></label>
@@ -15,8 +15,27 @@
 <label>Doctor name <input name="doctor_name" placeholder="Referring doctor"></label>
 <label class="span-2">Campaign name <input name="campaign_name" placeholder="Optional campaign reference"></label>
 </div></div>
-<div><section class="card registration-card"><div class="step-heading"><span>02</span><div><h2>Select a service</h2><p>One service offer can be issued per registration.</p></div></div><div class="offer-select">{% for o in offers %}<label class="offer-option"><input type="radio" name="offer_id" value="{{ o.id }}" required><span class="offer-check">✓</span><span><b>{{ o.name }}</b><small>{{ o.description }}</small><em>Valid for 10 days · One-time use</em></span></label>{% endfor %}</div></section>
+<div><section class="card registration-card"><div class="step-heading"><span>02</span><div><h2>Select a service</h2><p>One service offer can be issued per registration.</p></div></div><div class="offer-select">{% for o in offers %}<label class="offer-option" data-campaigns="{% for campaign in o.campaigns %}{{ campaign.id }}{% if not loop.last %},{% endif %}{% endfor %}"><input type="radio" name="offer_id" value="{{ o.id }}" required><span class="offer-check">✓</span><span><b>{{ o.name }}</b><small>{{ o.description }}</small><em>Valid for 10 days · One-time use</em></span></label>{% endfor %}</div></section>
 <section class="card consent-card"><label><input type="checkbox" name="consent_given" value="true" required><span><b>Patient consent recorded *</b><small>The patient agrees to receive this QR offer and related confirmations using the contact details provided.</small></span></label></section>
 <div class="form-footer"><a class="btn secondary" href="/patients">Cancel</a><button class="primary btn">Register & generate QR →</button></div></div>
 </form>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const campaign = document.querySelector('select[name="campaign_id"]');
+  const options = document.querySelectorAll('.offer-option[data-campaigns]');
+  const updateServices = () => {
+    const selected = campaign.value;
+    options.forEach((option) => {
+      const allowed = selected && option.dataset.campaigns.split(',').includes(selected);
+      option.hidden = !allowed;
+      option.querySelector('input').disabled = !allowed;
+      if (!allowed) option.querySelector('input').checked = false;
+    });
+  };
+  campaign.addEventListener('change', updateServices);
+  updateServices();
+})();
+</script>
 {% endblock %}

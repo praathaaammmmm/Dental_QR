@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Request
 from sqlalchemy import func
-from ..auth import require_auth
+from ..auth import require_admin
 from ..models import Patient, PatientOffer, Offer, DeliveryLog
 
 router = APIRouter()
 
 @router.get("/")
 def dashboard(request: Request):
-    guard = require_auth(request)
+    guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
     try:

@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}Clinic Staff Login{% endblock %}
+{% extends "base.html" %}{% block title %}{{ login_title|default('Clinic Staff Login') }}{% endblock %}
 {% block content %}
 <div class="login-shell">
   <section class="login-visual" aria-hidden="true">
@@ -9,10 +9,10 @@
   <section class="login-panel">
     <div class="login-form-wrap">
       <div class="login-brand"><span class="brand-mark">◆</span><span><b>Smriti Raj</b><small>Dentistry Ops</small></span></div>
-      <h1>Clinic Staff Login</h1>
-      <p class="muted login-lead">Secure access to the operations dashboard and patient records.</p>
+      <h1>{{ login_title|default('Clinic Staff Login') }}</h1>
+      <p class="muted login-lead">{{ login_lead|default('Secure access to the operations dashboard and patient records.') }}</p>
       {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
-      <form method="post" action="/login" class="login-form">
+      <form method="post" action="{{ login_action|default('/login') }}" class="login-form">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}">
         <label for="username">Staff ID or clinic username</label>
         <input id="username" type="text" name="username" autocomplete="username" placeholder="Enter clinic username" required autofocus>
