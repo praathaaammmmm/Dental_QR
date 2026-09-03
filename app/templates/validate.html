@@ -7,6 +7,7 @@
   {% if workspace != 'staff' %}<a class="text-link" href="/redemptions">View redemptions →</a>{% else %}<a class="text-link" href="{{ back_url|default('/staff/home') }}">← Back to workspace</a>{% endif %}
 </div>
 <div class="scanner-layout">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
   <section class="card scanner-card">
     <div class="card-heading"><div><h2>Camera scanner</h2><p>Position the patient QR inside the frame.</p></div><span class="live-pill">● LIVE</span></div>
     <div id="reader"><div class="scan-placeholder" aria-hidden="true"><span>⌗</span><b>Camera preview</b></div></div>

@@ -33,6 +33,11 @@ SMTP_FROM = os.getenv("SMTP_FROM", "")
 WHATSAPP_ENABLED = os.getenv("WHATSAPP_ENABLED", "false").lower() == "true"
 WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+VALIDATION_RATE_LIMIT_ATTEMPTS = int(os.getenv("VALIDATION_RATE_LIMIT_ATTEMPTS", "30"))
+VALIDATION_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("VALIDATION_RATE_LIMIT_WINDOW_SECONDS", "60"))
+BACKUP_ENCRYPTION_KEY = os.getenv("BACKUP_ENCRYPTION_KEY", "")
+BACKUP_DIR = Path(os.getenv("BACKUP_DIR", str(BASE_DIR / "backups"))).resolve()
+BACKUP_RETENTION_DAYS = int(os.getenv("BACKUP_RETENTION_DAYS", "30"))
 QR_DIR = BASE_DIR / "generated_qr"
 QR_DIR.mkdir(exist_ok=True)
 
@@ -50,6 +55,8 @@ def validate_security_config() -> None:
         errors.append("SESSION_HTTPS_ONLY must be true in production")
     if APP_ENV == "production" and not QR_SIGNING_KEY_CONFIGURED:
         errors.append("QR_SIGNING_KEY must be set separately in production")
+    if APP_ENV in {"production", "staging"} and not BACKUP_ENCRYPTION_KEY:
+        errors.append("BACKUP_ENCRYPTION_KEY must be set in production-like environments")
     if APP_ENV == "production" and not DATABASE_URL.startswith(("postgresql://", "postgresql+psycopg://")):
         errors.append("DATABASE_URL must use PostgreSQL in production")
     if APP_ENV == "production" and not PUBLIC_BASE_URL.startswith("https://"):
@@ -58,5 +65,9 @@ def validate_security_config() -> None:
         errors.append("ALLOWED_HOSTS must explicitly list production hosts")
     if DB_POOL_SIZE < 1 or DB_MAX_OVERFLOW < 0 or DB_POOL_TIMEOUT_SECONDS < 1:
         errors.append("Database pool settings must be positive")
+    if VALIDATION_RATE_LIMIT_ATTEMPTS < 1 or VALIDATION_RATE_LIMIT_WINDOW_SECONDS < 1:
+        errors.append("Validation rate-limit settings must be positive")
+    if BACKUP_RETENTION_DAYS < 1:
+        errors.append("BACKUP_RETENTION_DAYS must be at least 1")
     if errors:
         raise RuntimeError("Invalid security configuration: " + "; ".join(errors))

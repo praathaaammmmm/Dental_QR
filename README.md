@@ -131,6 +131,33 @@ Run:
 py -m pytest -q
 ```
 
+## Encrypted SQLite backups
+
+Backups never fall back to plaintext. Generate a local Fernet key once and put
+it in your uncommitted `.env` file:
+
+```powershell
+py -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+```text
+BACKUP_ENCRYPTION_KEY=<generated key>
+BACKUP_DIR=backups
+BACKUP_RETENTION_DAYS=30
+```
+
+Run the scheduled job daily from Task Scheduler or the private worker:
+
+```powershell
+py -m app.backup_job
+```
+
+The job snapshots SQLite safely, encrypts the artifact with Fernet, records a
+checksum of the encrypted file, and keeps the configured retention window.
+Keep the key outside the backup directory and copy encrypted artifacts to a
+separate protected location. The SQLite backup job intentionally refuses a
+non-SQLite database; use the managed PostgreSQL backup process after migration.
+
 ## Database migrations
 
 Local development may create SQLite tables automatically for convenience. Staging and production never create tables at application startup; apply Alembic migrations first:

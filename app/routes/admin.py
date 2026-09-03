@@ -1,15 +1,19 @@
 from datetime import date
 import csv
 from io import StringIO
+from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
-from sqlalchemy import func
 from ..auth import require_admin
-from ..models import Campaign, Offer, PatientOffer, DeliveryLog
+from ..models import Campaign, Offer, PatientOffer
 from ..security import require_csrf
 from ..audit_service import audit
 from ..models import StaffUser, AuditLog
 from ..auth import password_hasher
+from ..services.analytics_service import (
+    campaign_performance, daily_time_series, dashboard_summary, delivery_summary,
+    patient_export_rows, staff_performance,
+)
 
 router = APIRouter(prefix="/admin")
 
@@ -59,7 +63,7 @@ def toggle_staff(request: Request, staff_id: int, _csrf: None = Depends(require_
     finally: db.close()
 
 @router.get("/reports/campaigns.csv")
-def campaign_report(request: Request):
+def campaign_report(request: Request, campaign_id: int | None = None, offer_id: int | None = None, start: str = Query(""), end: str = Query("")):
     guard = require_admin(request)
     if guard: return guard
     db = request.app.state.db()
@@ -67,25 +71,19 @@ def campaign_report(request: Request):
         output = StringIO()
         writer = csv.writer(output)
         writer.writerow(["Campaign", "Start date", "End date", "Status", "Issued", "Redeemed", "Expired", "Conversion rate"])
-        campaigns = db.query(Campaign).order_by(Campaign.created_at.desc()).all()
-        for campaign in campaigns:
-            issued, redeemed, expired = counts(db, campaign.id)
-            writer.writerow([campaign.name, campaign.start_date, campaign.end_date, campaign.status, issued, redeemed, expired, f"{(redeemed * 100 / issued) if issued else 0:.1f}%"])
+        start_date = date.fromisoformat(start) if start else None
+        end_date = date.fromisoformat(end) if end else None
+        for campaign in campaign_performance(db, campaign_id, offer_id, start_date, end_date):
+            issued, redeemed = campaign["issued"], campaign["redeemed"]
+            writer.writerow([campaign["name"], campaign["start_date"], campaign["end_date"], campaign["status"], issued, redeemed, campaign["expired"], f"{(redeemed * 100 / issued) if issued else 0:.1f}%"])
         output.seek(0)
         return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=campaign-performance.csv"})
     finally:
         db.close()
 
 def counts(db, campaign_id=None, offer_id=None, start=None, end=None):
-    q = db.query(PatientOffer)
-    if campaign_id: q = q.filter(PatientOffer.campaign_id == campaign_id)
-    if offer_id: q = q.filter(PatientOffer.offer_id == offer_id)
-    if start: q = q.filter(PatientOffer.created_at >= start)
-    if end: q = q.filter(PatientOffer.created_at <= end)
-    issued = q.count()
-    redeemed = q.filter(PatientOffer.status == "REDEEMED").count()
-    expired = q.filter(PatientOffer.status == "EXPIRED").count()
-    return issued, redeemed, expired
+    summary = dashboard_summary(db, campaign_id, offer_id, start, end)
+    return summary["issued"], summary["redeemed"], summary["expired"]
 
 @router.get("/dashboard")
 def dashboard(request: Request, campaign_id: int | None = None, offer_id: int | None = None, start: str = Query(""), end: str = Query("")):
@@ -95,21 +93,46 @@ def dashboard(request: Request, campaign_id: int | None = None, offer_id: int | 
     try:
         start_date = date.fromisoformat(start) if start else None
         end_date = date.fromisoformat(end) if end else None
-        issued, redeemed, expired = counts(db, campaign_id, offer_id, start_date, end_date)
+        summary = dashboard_summary(db, campaign_id, offer_id, start_date, end_date)
+        issued, redeemed, expired = summary["issued"], summary["redeemed"], summary["expired"]
         conversion = round(redeemed * 100 / issued, 1) if issued else 0
         campaigns = db.query(Campaign).order_by(Campaign.created_at.desc()).all()
         offers = db.query(Offer).order_by(Offer.name).all()
-        deliveries = db.query(DeliveryLog).join(PatientOffer, DeliveryLog.coupon_id == PatientOffer.id)
-        if campaign_id: deliveries = deliveries.filter(PatientOffer.campaign_id == campaign_id)
-        if offer_id: deliveries = deliveries.filter(PatientOffer.offer_id == offer_id)
-        if start_date: deliveries = deliveries.filter(DeliveryLog.sent_at >= start_date)
-        if end_date: deliveries = deliveries.filter(DeliveryLog.sent_at < end_date.fromordinal(end_date.toordinal() + 1))
-        email_total = deliveries.filter(DeliveryLog.channel == "EMAIL").count()
-        whatsapp_total = deliveries.filter(DeliveryLog.channel == "WHATSAPP").count()
-        email_sent = deliveries.filter(DeliveryLog.channel == "EMAIL", DeliveryLog.status.in_(["SENT", "DELIVERED"])).count()
-        whatsapp_sent = deliveries.filter(DeliveryLog.channel == "WHATSAPP", DeliveryLog.status.in_(["SENT", "DELIVERED"])).count()
-        return request.app.state.templates.TemplateResponse(request, "admin_dashboard.html", {"request": request, "issued": issued, "redeemed": redeemed, "expired": expired, "conversion": conversion, "campaigns": campaigns, "offers": offers, "campaign_id": campaign_id, "offer_id": offer_id, "start": start, "end": end, "email_rate": round(email_sent * 100 / email_total, 1) if email_total else 0, "whatsapp_rate": round(whatsapp_sent * 100 / whatsapp_total, 1) if whatsapp_total else 0})
+        deliveries = delivery_summary(db, campaign_id, offer_id, start_date, end_date)
+        report_query = urlencode({key: value for key, value in {
+            "campaign_id": campaign_id, "offer_id": offer_id, "start": start, "end": end,
+        }.items() if value not in (None, "")})
+        return request.app.state.templates.TemplateResponse(request, "admin_dashboard.html", {
+            "request": request, "issued": issued, "redeemed": redeemed, "expired": expired,
+            "conversion": conversion, "campaigns": campaigns, "offers": offers,
+            "campaign_id": campaign_id, "offer_id": offer_id, "start": start, "end": end,
+            "email_rate": round(deliveries["email_sent"] * 100 / deliveries["email_total"], 1) if deliveries["email_total"] else 0,
+            "whatsapp_rate": round(deliveries["whatsapp_sent"] * 100 / deliveries["whatsapp_total"], 1) if deliveries["whatsapp_total"] else 0,
+            "time_series": daily_time_series(db, campaign_id, offer_id, start_date, end_date),
+            "staff_performance": staff_performance(db, start_date, end_date),
+            "report_query": report_query,
+        })
     finally: db.close()
+
+
+@router.get("/reports/patients.csv")
+def patient_report(request: Request, campaign_id: int | None = None, offer_id: int | None = None, start: str = Query(""), end: str = Query("")):
+    guard = require_admin(request)
+    if guard:
+        return guard
+    db = request.app.state.db()
+    try:
+        start_date = date.fromisoformat(start) if start else None
+        end_date = date.fromisoformat(end) if end else None
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Patient ID", "Patient", "Mobile", "Email", "Age", "Gender", "Campaign", "Service", "Registration ID", "Registered", "Expires", "Status", "Redeemed", "Redeemed by"])
+        for row in patient_export_rows(db, campaign_id, offer_id, start_date, end_date):
+            writer.writerow([row["patient_uid"], row["full_name"], row["mobile"], row["email"], row["age"], row["gender"], row["campaign"], row["service"], row["coupon_uid"], row["created_at"], row["expires_at"], row["status"], row["redeemed_at"], row["redeemed_by"]])
+        output.seek(0)
+        return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=patient-registrations.csv"})
+    finally:
+        db.close()
 
 @router.get("/campaigns")
 def campaigns(request: Request):

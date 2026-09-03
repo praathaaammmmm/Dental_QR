@@ -1,9 +1,39 @@
 import secrets
+from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
+from threading import Lock
 
 from fastapi import Form, HTTPException, Request
 
 
 CSRF_SESSION_KEY = "csrf_token"
+_attempts = defaultdict(deque)
+_attempts_lock = Lock()
+
+
+def client_key(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def is_rate_limited(scope: str, key: str, maximum: int, window: timedelta) -> bool:
+    """Return whether a scoped in-memory sliding window has reached its limit."""
+    now = datetime.now(timezone.utc)
+    bucket = (scope, key)
+    with _attempts_lock:
+        attempts = _attempts[bucket]
+        while attempts and now - attempts[0] > window:
+            attempts.popleft()
+        return len(attempts) >= maximum
+
+
+def record_rate_limit_event(scope: str, key: str) -> None:
+    with _attempts_lock:
+        _attempts[(scope, key)].append(datetime.now(timezone.utc))
+
+
+def clear_rate_limit_events(scope: str, key: str) -> None:
+    with _attempts_lock:
+        _attempts.pop((scope, key), None)
 
 
 def get_csrf_token(request: Request) -> str:
