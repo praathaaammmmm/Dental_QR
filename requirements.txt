@@ -13,3 +13,4 @@ httpx>=0.27,<1
 pytest>=8,<9
 argon2-cffi>=23.1,<26
 itsdangerous>=2.2,<3
+cryptography>=44,<49

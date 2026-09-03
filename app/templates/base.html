@@ -9,30 +9,14 @@
 </head>
 <body class="{% if request.session.get('user') %}portal-body{% else %}login-body{% endif %}">
 {% if request.session.get("user") %}
-<aside class="sidebar" id="sidebar">
-  <a class="brand" href="/" aria-label="Smriti Raj Dentistry dashboard"><span class="brand-mark" aria-hidden="true">◆</span><span><b>Smriti Raj</b><small>Dentistry Ops</small></span></a>
-  <nav class="side-nav" aria-label="Main navigation">
-    {% if request.session.get('role', 'admin') == 'admin' %}
-      <a class="{% if request.url.path == '/admin/dashboard' %}active{% endif %}" href="/admin/dashboard"><span>◈</span>Admin CRM</a><a class="{% if request.url.path.startswith('/admin/staff') %}active{% endif %}" href="/admin/staff"><span>♟</span>Staff</a><a class="{% if request.url.path.startswith('/admin/audit') %}active{% endif %}" href="/admin/audit"><span>◷</span>Audit log</a>
-      <a class="{% if request.url.path == '/' %}active{% endif %}" href="/"><span>▦</span>Dashboard</a><a class="{% if request.url.path.startswith('/patients') %}active{% endif %}" href="/patients"><span>♙</span>CRM</a><a class="{% if request.url.path.startswith('/validate') %}active{% endif %}" href="/validate"><span>⌗</span>QR Scanner</a>
-    {% else %}
-      <a class="{% if request.url.path.startswith('/staff/home') %}active{% endif %}" href="/staff/home"><span>◈</span>Staff Workspace</a><a class="{% if request.url.path.startswith('/staff/register') %}active{% endif %}" href="/staff/register"><span>＋</span>Register patient</a><a class="{% if request.url.path.startswith('/staff/patients') %}active{% endif %}" href="/staff/patients"><span>♙</span>Patients</a><a class="{% if request.url.path.startswith('/staff/validate') %}active{% endif %}" href="/staff/validate"><span>⌗</span>Validate QR</a>
-    {% endif %}
-  </nav>
-  <div class="sidebar-lower">
-    <a class="btn primary register-cta" href="{{ '/staff/register' if request.session.get('role') == 'staff' else '/patients/register' }}">＋ Add patient</a>
-    <span class="utility-link muted-link"><span>⚙</span> Settings</span>
-    <span class="utility-link muted-link"><span>?</span> Support</span>
-  </div>
-  <form method="post" action="{{ '/staff/logout' if request.session.get('role') == 'staff' else '/logout' }}" class="sidebar-footer">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}">
-    <button class="logout-button" type="submit"><span>↪</span> Sign out</button>
-  </form>
-</aside>
+{% include "includes/sidebar.html" %}
 <header class="mobile-header"><button type="button" class="menu-button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">☰</button><span>Smriti Raj Dentistry</span></header>
 <header class="top-header"><strong>{% block section_title %}Operations{% endblock %}</strong><div><span aria-hidden="true">♢</span><span aria-hidden="true">?</span><span class="staff-avatar">SR</span></div></header>
 {% endif %}
 <main class="{% if request.session.get('user') %}app-main{% else %}login-main{% endif %}">
+  {% if request.session.get("user") %}
+    {% include "includes/breadcrumbs.html" %}
+  {% endif %}
   {% if request.query_params.get("message") %}<div class="notice">{{ request.query_params.get("message") }}</div>{% endif %}
   {% block content %}{% endblock %}
 </main>

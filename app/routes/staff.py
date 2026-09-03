@@ -8,7 +8,8 @@ from ..audit_service import audit
 from ..auth import require_staff
 from ..coupon_service import redeem_atomic, refresh_expiry
 from ..models import AuditLog, Campaign, Offer, Patient, PatientOffer
-from ..security import require_csrf
+from ..config import VALIDATION_RATE_LIMIT_ATTEMPTS, VALIDATION_RATE_LIMIT_WINDOW_SECONDS
+from ..security import client_key, is_rate_limited, record_rate_limit_event, require_csrf
 from ..services.delivery_service import send_qr_delivery
 from ..services.registration_service import RegistrationError, register_patient_offer
 from ..time_utils import utc_now
@@ -188,6 +189,14 @@ def validate_submit(request: Request, token: str = Form(...), _csrf: None = Depe
     guard = require_staff(request)
     if guard:
         return guard
+    request_key = client_key(request)
+    validation_window = timedelta(seconds=VALIDATION_RATE_LIMIT_WINDOW_SECONDS)
+    if is_rate_limited("staff-validate", request_key, VALIDATION_RATE_LIMIT_ATTEMPTS, validation_window):
+        return request.app.state.templates.TemplateResponse(request, "validate.html", _context(
+            request, result=None, token="", form_action="/staff/validate", back_url="/staff/home",
+            error="Too many validation attempts. Please wait a minute and try again.",
+        ), status_code=429)
+    record_rate_limit_event("staff-validate", request_key)
     db = request.app.state.db()
     try:
         coupon = find_coupon(db, token)

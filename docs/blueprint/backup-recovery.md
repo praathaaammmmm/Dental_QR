@@ -16,6 +16,14 @@
 6. Record backup time, size, checksum, and result without patient data.
 7. Test restoration into an isolated location before Saturday.
 
+## Local SQLite job
+
+For the local SQLite pilot, schedule `py -m app.backup_job` at least daily.
+It refuses to run without `BACKUP_ENCRYPTION_KEY`, creates only Fernet-encrypted
+artifacts, writes a timestamped metadata record with the encrypted artifact's
+checksum, and prunes artifacts older than `BACKUP_RETENTION_DAYS`. Store the
+Fernet key in `.env` or a secret manager, never beside the backup artifacts.
+
 For Railway, keep PostgreSQL on private networking and verify the platform backup capability available to the selected plan. Maintain a separate encrypted export outside the running Railway project so provider or project-level failure does not remove the only recovery copy.
 
 ## Recovery targets

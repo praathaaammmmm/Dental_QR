@@ -1,0 +1,37 @@
+{% set path = request.url.path %}
+<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>
+{% if request.session.get('role') == 'staff' %}
+  <li><a href="/staff/home">Staff workspace</a></li>
+  {% if path.startswith('/staff/register') %}<li aria-current="page">Register patient</li>
+  {% elif path.startswith('/staff/patients/') %}<li><a href="/staff/patients">Patients</a></li><li aria-current="page">Patient record</li>
+  {% elif path.startswith('/staff/patients') %}<li aria-current="page">Patients</li>
+  {% elif path.startswith('/staff/validate') %}<li aria-current="page">Validate QR</li>
+  {% else %}<li aria-current="page">Home</li>{% endif %}
+{% elif path.startswith('/admin/campaigns/') %}
+  <li><a href="/admin/dashboard">Admin CRM</a></li><li><a href="/admin/campaigns">Campaigns</a></li><li aria-current="page">Campaign detail</li>
+{% elif path.startswith('/admin/campaigns') %}
+  <li><a href="/admin/dashboard">Admin CRM</a></li><li aria-current="page">Campaigns</li>
+{% elif path.startswith('/admin/dashboard') %}
+  <li><a href="/admin/dashboard">Admin CRM</a></li><li aria-current="page">Dashboard</li>
+{% elif path.startswith('/admin/staff') %}
+  <li><a href="/admin/dashboard">Admin CRM</a></li><li aria-current="page">Staff</li>
+{% elif path.startswith('/admin/audit') %}
+  <li><a href="/admin/dashboard">Admin CRM</a></li><li aria-current="page">Audit log</li>
+{% elif path.startswith('/patients/register') %}
+  <li><a href="/patients">CRM</a></li><li><a href="/patients">Patients</a></li><li aria-current="page">Register patient</li>
+{% elif path.startswith('/patients/') %}
+  <li><a href="/patients">CRM</a></li><li><a href="/patients">Patients</a></li><li aria-current="page">Patient record</li>
+{% elif path.startswith('/patients') %}
+  <li><a href="/patients">CRM</a></li><li aria-current="page">Patients</li>
+{% elif path == '/offers' %}
+  <li><a href="/patients">CRM</a></li><li aria-current="page">Services</li>
+{% elif path.startswith('/redemptions') %}
+  <li><a href="/patients">CRM</a></li><li aria-current="page">Redemptions</li>
+{% elif path.startswith('/delivery') %}
+  <li><a href="/patients">CRM</a></li><li aria-current="page">Delivery</li>
+{% elif path.startswith('/validate') %}
+  <li><a href="/">Operations</a></li><li aria-current="page">QR scanner</li>
+{% else %}
+  <li><a href="/">Operations</a></li><li aria-current="page">Dashboard</li>
+{% endif %}
+</ol></nav>
