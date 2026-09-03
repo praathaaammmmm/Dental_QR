@@ -1,4 +1,3 @@
-from datetime import datetime
 import re
 from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse
@@ -8,6 +7,7 @@ from ..models import PatientOffer
 from ..coupon_service import refresh_expiry, redeem_atomic
 from ..audit_service import audit
 from ..security import require_csrf
+from ..time_utils import utc_now
 from ..qr_service import token_for, token_hash
 
 router = APIRouter()
@@ -37,7 +37,7 @@ def validate_page(request: Request):
     if guard: return guard
     db = request.app.state.db()
     try:
-        return request.app.state.templates.TemplateResponse("validate.html", {"request": request, "result": None, "token": ""})
+        return request.app.state.templates.TemplateResponse(request, "validate.html", {"request": request, "result": None, "token": ""})
     finally:
         db.close()
 
@@ -51,13 +51,13 @@ def validate_submit(request: Request, token: str = Form(...), _csrf: None = Depe
         if not coupon:
             result = {"kind": "INVALID", "message": "This QR/token is not registered in the Smriti Raj Dentistry system."}
         else:
-            changed = refresh_expiry(coupon, datetime.utcnow())
+            changed = refresh_expiry(coupon, utc_now())
             if changed:
                 audit(db, request.session.get("user", "admin"), "QR_EXPIRED", coupon.id, coupon.patient_id)
             result = result_for(coupon)
             audit(db, request.session.get("user", "admin"), "QR_VALIDATED", coupon.id, coupon.patient_id, {"result": result["kind"]})
             db.commit()
-        return request.app.state.templates.TemplateResponse("validate.html", {"request": request, "result": result, "token": ""})
+        return request.app.state.templates.TemplateResponse(request, "validate.html", {"request": request, "result": result, "token": ""})
     finally:
         db.close()
 
@@ -70,9 +70,9 @@ def validation_result(request: Request, coupon_uid: str):
         coupon = db.execute(select(PatientOffer).where(PatientOffer.coupon_uid == coupon_uid)).scalar_one_or_none()
         if not coupon:
             return RedirectResponse("/validate", status_code=303)
-        refresh_expiry(coupon, datetime.utcnow())
+        refresh_expiry(coupon, utc_now())
         db.commit()
-        return request.app.state.templates.TemplateResponse("validate.html", {"request": request, "result": result_for(coupon), "token": ""})
+        return request.app.state.templates.TemplateResponse(request, "validate.html", {"request": request, "result": result_for(coupon), "token": ""})
     finally:
         db.close()
 
@@ -85,7 +85,7 @@ def redeem(request: Request, coupon_id: int, _csrf: None = Depends(require_csrf)
         coupon = db.get(PatientOffer, coupon_id)
         if not coupon:
             return RedirectResponse("/validate", status_code=303)
-        now = datetime.utcnow()
+        now = utc_now()
         ok = redeem_atomic(db, coupon.id, request.session.get("user", "admin"), now)
         if ok:
             # Atomic update succeeded. Audit in a separate transaction.

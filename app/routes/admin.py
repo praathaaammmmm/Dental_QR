@@ -21,7 +21,7 @@ def audit_log(request: Request):
     db = request.app.state.db()
     try:
         rows = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(250).all()
-        return request.app.state.templates.TemplateResponse("audit.html", {"request": request, "rows": rows})
+        return request.app.state.templates.TemplateResponse(request, "audit.html", {"request": request, "rows": rows})
     finally: db.close()
 
 @router.get("/staff")
@@ -30,7 +30,7 @@ def staff_list(request: Request):
     if guard: return guard
     db = request.app.state.db()
     try:
-        return request.app.state.templates.TemplateResponse("staff.html", {"request": request, "rows": db.query(StaffUser).order_by(StaffUser.username).all()})
+        return request.app.state.templates.TemplateResponse(request, "staff.html", {"request": request, "rows": db.query(StaffUser).order_by(StaffUser.username).all()})
     finally: db.close()
 
 @router.post("/staff")
@@ -109,7 +109,7 @@ def dashboard(request: Request, campaign_id: int | None = None, offer_id: int | 
         whatsapp_total = deliveries.filter(DeliveryLog.channel == "WHATSAPP").count()
         email_sent = deliveries.filter(DeliveryLog.channel == "EMAIL", DeliveryLog.status.in_(["SENT", "DELIVERED"])).count()
         whatsapp_sent = deliveries.filter(DeliveryLog.channel == "WHATSAPP", DeliveryLog.status.in_(["SENT", "DELIVERED"])).count()
-        return request.app.state.templates.TemplateResponse("admin_dashboard.html", {"request": request, "issued": issued, "redeemed": redeemed, "expired": expired, "conversion": conversion, "campaigns": campaigns, "offers": offers, "campaign_id": campaign_id, "offer_id": offer_id, "start": start, "end": end, "email_rate": round(email_sent * 100 / email_total, 1) if email_total else 0, "whatsapp_rate": round(whatsapp_sent * 100 / whatsapp_total, 1) if whatsapp_total else 0})
+        return request.app.state.templates.TemplateResponse(request, "admin_dashboard.html", {"request": request, "issued": issued, "redeemed": redeemed, "expired": expired, "conversion": conversion, "campaigns": campaigns, "offers": offers, "campaign_id": campaign_id, "offer_id": offer_id, "start": start, "end": end, "email_rate": round(email_sent * 100 / email_total, 1) if email_total else 0, "whatsapp_rate": round(whatsapp_sent * 100 / whatsapp_total, 1) if whatsapp_total else 0})
     finally: db.close()
 
 @router.get("/campaigns")
@@ -123,7 +123,7 @@ def campaigns(request: Request):
         for campaign in rows:
             issued, redeemed, expired = counts(db, campaign.id)
             performance.append({"campaign": campaign, "issued": issued, "redeemed": redeemed, "expired": expired, "conversion": round(redeemed * 100 / issued, 1) if issued else 0})
-        return request.app.state.templates.TemplateResponse("campaigns.html", {"request": request, "rows": rows, "performance": performance, "offers": db.query(Offer).order_by(Offer.name).all()})
+        return request.app.state.templates.TemplateResponse(request, "campaigns.html", {"request": request, "rows": rows, "performance": performance, "offers": db.query(Offer).order_by(Offer.name).all()})
     finally: db.close()
 
 @router.post("/campaigns")
@@ -171,5 +171,5 @@ def campaign_detail(request: Request, campaign_id: int):
         for offer in campaign.offers:
             service_issued, service_redeemed, service_expired = counts(db, campaign_id, offer.id)
             service_stats.append({"name": offer.name, "issued": service_issued, "redeemed": service_redeemed, "expired": service_expired, "conversion": round(service_redeemed * 100 / service_issued, 1) if service_issued else 0})
-        return request.app.state.templates.TemplateResponse("campaign_detail.html", {"request": request, "campaign": campaign, "issued": issued, "redeemed": redeemed, "expired": expired, "conversion": round(redeemed * 100 / issued, 1) if issued else 0, "service_stats": service_stats})
+        return request.app.state.templates.TemplateResponse(request, "campaign_detail.html", {"request": request, "campaign": campaign, "issued": issued, "redeemed": redeemed, "expired": expired, "conversion": round(redeemed * 100 / issued, 1) if issued else 0, "service_stats": service_stats})
     finally: db.close()

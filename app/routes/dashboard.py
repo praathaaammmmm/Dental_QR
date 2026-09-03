@@ -28,7 +28,7 @@ def dashboard(request: Request):
                 "active": db.query(func.count(PatientOffer.id)).filter(PatientOffer.offer_id == offer.id, PatientOffer.status == "ACTIVE").scalar() or 0,
                 "redeemed": db.query(func.count(PatientOffer.id)).filter(PatientOffer.offer_id == offer.id, PatientOffer.status == "REDEEMED").scalar() or 0,
             })
-        return request.app.state.templates.TemplateResponse("dashboard.html", {
+        return request.app.state.templates.TemplateResponse(request, "dashboard.html", {
             "request": request, "total": total, "active": active,
             "redeemed": redeemed, "expired": expired, "recent": recent, "stats": stats,
             "delivery_percent": delivery_percent,

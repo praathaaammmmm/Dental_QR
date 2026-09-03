@@ -31,12 +31,24 @@ def client():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     from app.database import SessionLocal
-    from app.models import Offer
+    from app.models import Campaign, Offer
     db = SessionLocal()
-    db.add_all([
+    offers = [
         Offer(name="Free In-House Zirconia Crown", description="test"),
         Offer(name="Free In-House Aligner Scan", description="test"),
-    ])
+    ]
+    db.add_all(offers)
+    db.flush()
+    from datetime import date, timedelta
+    campaign = Campaign(
+        name="Test Active Campaign",
+        start_date=date.today() - timedelta(days=1),
+        end_date=date.today() + timedelta(days=1),
+        status="ACTIVE",
+        created_by="test",
+    )
+    campaign.offers = offers
+    db.add(campaign)
     db.commit(); db.close()
     with CSRFTestClient(app) as c:
         c.post("/login", data={"username":"smritiraj-clinic", "password":"test-password"})
