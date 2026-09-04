@@ -23,7 +23,7 @@ def test_valid_centralized_login_creates_session(client):
         follow_redirects=False,
     )
     assert response.status_code == 303
-    assert response.headers["location"] == "/"
+    assert response.headers["location"] == "/admin/dashboard"
     assert "srd_clinic_session=" in response.headers["set-cookie"]
     assert "httponly" in response.headers["set-cookie"].lower()
 

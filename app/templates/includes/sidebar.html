@@ -15,7 +15,6 @@
       <a class="{% if admin_crm_active %}active{% endif %}" href="/admin/dashboard"{% if admin_crm_active %} aria-current="page"{% endif %}><span>◈</span>Admin CRM</a>
       <a class="{% if path.startswith('/admin/staff') %}active{% endif %}" href="/admin/staff"{% if path.startswith('/admin/staff') %} aria-current="page"{% endif %}><span>♟</span>Staff</a>
       <a class="{% if path.startswith('/admin/audit') %}active{% endif %}" href="/admin/audit"{% if path.startswith('/admin/audit') %} aria-current="page"{% endif %}><span>◷</span>Audit log</a>
-      <a class="{% if path == '/' %}active{% endif %}" href="/"{% if path == '/' %} aria-current="page"{% endif %}><span>▦</span>Dashboard</a>
       <details class="nav-dropdown{% if crm_active %} active{% endif %}"{% if crm_active %} open{% endif %}>
         <summary><span>♙</span>CRM <b aria-hidden="true">⌄</b></summary>
         <div class="nav-dropdown-items">

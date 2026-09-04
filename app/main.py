@@ -1,12 +1,13 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from .auth import is_authenticated
 from .database import Base, engine, SessionLocal
 from .models import Offer
 from .config import ALLOWED_HOSTS, APP_ENV, SESSION_MAX_AGE_SECONDS, SESSION_HTTPS_ONLY, SESSION_SECRET_KEY, validate_security_config
@@ -56,15 +57,23 @@ templates.env.filters["clinic_time"] = format_clinic_time
 app.state.templates = templates
 app.state.db = SessionLocal
 
-from .routes import auth, dashboard, patients, coupons, validation, operations, admin, staff
+from .routes import auth, patients, coupons, validation, operations, admin, staff
 app.include_router(auth.router)
-app.include_router(dashboard.router)
 app.include_router(patients.router)
 app.include_router(coupons.router)
 app.include_router(validation.router)
 app.include_router(operations.router)
 app.include_router(admin.router)
 app.include_router(staff.router)
+
+@app.get("/", include_in_schema=False)
+def root(request: Request):
+    if not is_authenticated(request):
+        return RedirectResponse("/login", status_code=303)
+    if request.session.get("role") == "staff":
+        return RedirectResponse("/staff/home", status_code=303)
+    return RedirectResponse("/admin/dashboard", status_code=303)
+
 
 @app.get("/health", include_in_schema=False)
 def health():
