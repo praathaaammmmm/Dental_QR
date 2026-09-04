@@ -4,23 +4,24 @@
   <section class="login-visual" aria-hidden="true">
     <div class="visual-glow glow-one"></div><div class="visual-glow glow-two"></div>
     <div class="tooth-art"><span></span></div>
-    <div class="visual-copy"><h2>Elevating Dental Care.</h2><p>Streamlined operations for a tranquil workspace and exceptional patient outcomes.</p></div>
+    <div class="visual-copy"><span class="eyebrow">SMRITI RAJ DENTISTRY</span><h2>Everything your clinic needs, in one place.</h2><p>Manage patient registrations, offers, and daily clinic work with confidence.</p></div>
   </section>
   <section class="login-panel">
     <div class="login-form-wrap">
-      <div class="login-brand"><span class="brand-mark">◆</span><span><b>Smriti Raj</b><small>Dentistry Ops</small></span></div>
-      <h1>{{ login_title|default('Clinic Login') }}</h1>
-      <p class="muted login-lead">{{ login_lead|default('Use your administrator or staff account to access the right workspace.') }}</p>
+      <div class="login-brand"><img src="/static/img/smriti-raj-dentistry.png" alt="Smriti Raj Dentistry"></div>
+      <span class="eyebrow">SECURE CLINIC ACCESS</span>
+      <h1>Welcome back</h1>
+      <p class="muted login-lead">Sign in with the username and password given to you by the clinic.</p>
       {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
       <form method="post" action="{{ login_action|default('/login') }}" class="login-form">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}">
-        <label for="username">{{ username_label|default('Username') }}</label>
-        <input id="username" type="text" name="username" autocomplete="username" placeholder="{{ username_placeholder|default('Enter your username') }}" required autofocus>
+        <label for="username">Username</label>
+        <input id="username" type="text" name="username" autocomplete="username" placeholder="Enter your username" required autofocus>
         <label for="password">Password</label>
         <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Enter password" required>
-        <button class="primary btn full" type="submit">Sign In <span>→</span></button>
+        <button class="primary btn full" type="submit">Continue <span>→</span></button>
       </form>
-      <p class="login-help">{{ login_help|default('Administrators open the CRM; staff open the registration workspace.') }}</p>
+      <div class="login-help"><b>One login for everyone</b><span>The system automatically opens the right workspace for administrators and staff.</span></div>
     </div>
   </section>
 </div>

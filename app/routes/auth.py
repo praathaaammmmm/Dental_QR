@@ -27,7 +27,7 @@ def _clear_failures(key: str) -> None:
 @router.get("/login")
 def login_page(request: Request):
     if request.session.get("user"):
-        return RedirectResponse("/staff/home" if request.session.get("role") == "staff" else "/", status_code=303)
+        return RedirectResponse("/staff/home" if request.session.get("role") == "staff" else "/admin/dashboard", status_code=303)
     return request.app.state.templates.TemplateResponse(
         request,
         "login.html", {"request": request, "error": None}
@@ -52,7 +52,7 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
         if identity["role"] == "staff":
             request.session["staff_user_id"] = identity["staff_user_id"]
         request.session["session_version"] = SESSION_VERSION
-        return RedirectResponse("/staff/home" if identity["role"] == "staff" else "/", status_code=303)
+        return RedirectResponse("/staff/home" if identity["role"] == "staff" else "/admin/dashboard", status_code=303)
     _record_failure(request_key)
     return request.app.state.templates.TemplateResponse(
         request,
