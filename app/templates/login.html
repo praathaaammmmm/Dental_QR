@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}{{ login_title|default('Admin / Clinic Login') }}{% endblock %}
+{% extends "base.html" %}{% block title %}{{ login_title|default('Clinic Login') }}{% endblock %}
 {% block content %}
 <div class="login-shell">
   <section class="login-visual" aria-hidden="true">
@@ -9,18 +9,18 @@
   <section class="login-panel">
     <div class="login-form-wrap">
       <div class="login-brand"><span class="brand-mark">◆</span><span><b>Smriti Raj</b><small>Dentistry Ops</small></span></div>
-      <h1>{{ login_title|default('Admin / Clinic Login') }}</h1>
-      <p class="muted login-lead">{{ login_lead|default('Sign in to the Admin CRM and hospital operations dashboard.') }}</p>
+      <h1>{{ login_title|default('Clinic Login') }}</h1>
+      <p class="muted login-lead">{{ login_lead|default('Use your administrator or staff account to access the right workspace.') }}</p>
       {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
       <form method="post" action="{{ login_action|default('/login') }}" class="login-form">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}">
-        <label for="username">{{ username_label|default('Clinic administrator username') }}</label>
-        <input id="username" type="text" name="username" autocomplete="username" placeholder="{{ username_placeholder|default('Enter clinic administrator username') }}" required autofocus>
+        <label for="username">{{ username_label|default('Username') }}</label>
+        <input id="username" type="text" name="username" autocomplete="username" placeholder="{{ username_placeholder|default('Enter your username') }}" required autofocus>
         <label for="password">Password</label>
         <input id="password" type="password" name="password" autocomplete="current-password" placeholder="Enter password" required>
         <button class="primary btn full" type="submit">Sign In <span>→</span></button>
       </form>
-      <p class="login-help">{{ login_help|default('Admin account configured in the application environment') }}</p>
+      <p class="login-help">{{ login_help|default('Administrators open the CRM; staff open the registration workspace.') }}</p>
     </div>
   </section>
 </div>

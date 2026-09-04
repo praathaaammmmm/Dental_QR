@@ -2,7 +2,7 @@ def test_login_uses_integrated_frontend_and_cursor(client):
     client.post("/logout")
     response = client.get("/login")
     assert response.status_code == 200
-    assert "Admin / Clinic Login" in response.text
+    assert "Clinic Login" in response.text
     assert "/static/cursor.js" in response.text
     assert "threejs" not in response.text.lower()
 

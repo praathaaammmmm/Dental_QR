@@ -5,7 +5,7 @@ def test_login_rejects_wrong_credentials(client):
     client.post("/logout")
     response = client.post("/login", data={"username": "smritiraj-clinic", "password": "wrong-password"})
     assert response.status_code == 200
-    assert "Invalid password" in response.text
+    assert "Invalid username or password" in response.text
 
 
 def test_protected_page_requires_login(client):

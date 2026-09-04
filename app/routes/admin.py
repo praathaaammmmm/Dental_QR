@@ -4,6 +4,7 @@ from io import StringIO
 from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
+from sqlalchemy.exc import IntegrityError
 from ..auth import require_admin
 from ..models import Campaign, Offer, PatientOffer
 from ..security import require_csrf
@@ -43,7 +44,12 @@ def create_staff(request: Request, username: str = Form(...), password: str = Fo
     db = request.app.state.db()
     try:
         user = StaffUser(username=username.strip(), password_hash=password_hasher.hash(password), role="staff", active=True)
-        db.add(user); db.commit()
+        db.add(user)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return RedirectResponse("/admin/staff?message=That staff username is already in use", status_code=303)
         return RedirectResponse("/admin/staff?message=Staff account created", status_code=303)
     finally: db.close()
 
