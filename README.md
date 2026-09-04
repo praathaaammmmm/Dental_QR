@@ -55,20 +55,20 @@ http://127.0.0.1:8000/docs
 
 ## Authentication and account setup
 
-The application has two separate login mechanisms. They are intentionally not interchangeable.
+The application has one shared login page at `/login`. It accepts either an administrator account or an active staff account, then automatically sends the user to the appropriate workspace.
 
-### Admin / Clinic Login (`/login`)
+### Administrator account
 
 This is the single administrator account for the Admin CRM, campaign management, analytics, staff management, and other admin-only functions. Its credentials come only from the environment:
 
 - `CLINIC_USERNAME`
 - `CLINIC_PASSWORD_HASH` (an Argon2 hash)
 
-Use `py scripts/create_clinic_credentials.py` to generate the values, then place them in the local `.env` file or your deployment environment. The default username is `smritiraj-clinic`. This account is not stored in `staff_users`, so adding a record to the database will not make it valid at `/login`.
+Use `py scripts/create_clinic_credentials.py` to generate the values, then place them in the local `.env` file or your deployment environment. The default username is `smritiraj-clinic`. This account is not stored in `staff_users`.
 
-### Staff Login (`/staff/login`)
+### Staff accounts
 
-This is for hospital staff who register patients and validate or redeem QR offers. Staff credentials are stored as Argon2 password hashes in the `staff_users` database table. An administrator creates and manages these accounts in **Admin CRM → Staff**. A staff account cannot be used at `/login`; it must use `/staff/login`.
+Hospital staff use the same `/login` page to enter the registration workspace, where they can register patients and validate or redeem QR offers. Their credentials are stored as Argon2 password hashes in the `staff_users` database table. An administrator creates and manages these accounts in **Admin CRM → Staff**.
 
 ## Development seed data
 

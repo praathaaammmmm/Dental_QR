@@ -25,7 +25,7 @@ def _login_as_staff(client):
     _attempts.clear()
     client.post("/logout")
     response = client.post(
-        "/staff/login",
+        "/login",
         data={"username": "staff-user", "password": "staff-password"},
         follow_redirects=False,
     )
