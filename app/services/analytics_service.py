@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
+from ..beneficiary_categories import ALL_CATEGORIES
 from ..models import AuditLog, Campaign, DeliveryLog, Offer, Patient, PatientOffer, StaffUser
 
 
@@ -77,6 +78,15 @@ def staff_performance(db: Session, start: date | None = None, end: date | None =
     return [dict(row) for row in rows]
 
 
+def registrations_by_category(db: Session, campaign_id=None, offer_id=None, start: date | None = None, end: date | None = None) -> list[dict]:
+    conditions = _offer_conditions(campaign_id, offer_id, start, end, PatientOffer.created_at)
+    rows = db.execute(select(
+        PatientOffer.beneficiary_category.label("category"), func.count(PatientOffer.id).label("count"),
+    ).where(*conditions).group_by(PatientOffer.beneficiary_category)).mappings().all()
+    counts = {row["category"]: row["count"] for row in rows}
+    return [{"value": value, "label": label, "count": counts.get(value, 0)} for value, label in ALL_CATEGORIES]
+
+
 def campaign_performance(db: Session, campaign_id=None, offer_id=None, start: date | None = None, end: date | None = None) -> list[dict]:
     coupon_join = [PatientOffer.campaign_id == Campaign.id]
     coupon_join.extend(_offer_conditions(campaign_id, offer_id, start, end, PatientOffer.created_at))
@@ -97,7 +107,7 @@ def patient_export_rows(db: Session, campaign_id=None, offer_id=None, start: dat
         Patient.patient_uid, Patient.full_name, Patient.mobile, Patient.email, Patient.age, Patient.gender,
         Campaign.name.label("campaign"), Offer.name.label("service"), PatientOffer.coupon_uid,
         PatientOffer.created_at, PatientOffer.expires_at, PatientOffer.status, PatientOffer.redeemed_at,
-        PatientOffer.redeemed_by,
+        PatientOffer.redeemed_by, PatientOffer.beneficiary_category,
     ).select_from(PatientOffer).join(Patient).join(Offer).outerjoin(Campaign).where(*conditions).order_by(
         PatientOffer.created_at.desc()
     )).mappings().all()

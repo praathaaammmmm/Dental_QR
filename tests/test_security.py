@@ -40,7 +40,7 @@ def test_registration_does_not_expose_internal_error(client, monkeypatch):
     monkeypatch.setattr(registration_service, "generate_qr", fail_generation)
     response = client.post(
         "/patients/register",
-        data={"full_name": "Test Patient", "mobile": "9999999999", "campaign_id": "1", "offer_id": "1", "consent_given": "true"},
+        data={"full_name": "Test Patient", "mobile": "9999999999", "campaign_id": "1", "offer_id": "1", "beneficiary_category": "CGHS", "consent_given": "true"},
     )
     assert response.status_code == 500
     assert "Registration could not be completed" in response.text

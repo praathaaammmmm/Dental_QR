@@ -1,6 +1,7 @@
 from datetime import date, datetime
-from sqlalchemy import Boolean, Date, String, Integer, DateTime, ForeignKey, Text, Index, UniqueConstraint, Table, Column
+from sqlalchemy import Boolean, CheckConstraint, Date, String, Integer, DateTime, ForeignKey, Text, Index, UniqueConstraint, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .beneficiary_categories import ALL_VALUES
 from .database import Base
 from .time_utils import utc_now
 
@@ -42,6 +43,7 @@ class Offer(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(150), unique=True)
     description: Mapped[str] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     patient_offers = relationship("PatientOffer", back_populates="offer")
     campaigns = relationship("Campaign", secondary="campaign_offers", back_populates="offers")
@@ -80,6 +82,7 @@ class PatientOffer(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     cancelled_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     cancellation_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    beneficiary_category: Mapped[str] = mapped_column(String(20), index=True)
 
     patient = relationship("Patient", back_populates="offers")
     offer = relationship("Offer", back_populates="patient_offers")
@@ -87,6 +90,10 @@ class PatientOffer(Base):
 
     __table_args__ = (
         Index("ix_patient_offers_status_expiry", "status", "expires_at"),
+        CheckConstraint(
+            "beneficiary_category IN (" + ", ".join(f"'{value}'" for value in sorted(ALL_VALUES)) + ")",
+            name="ck_patient_offers_beneficiary_category",
+        ),
     )
 
 class DeliveryLog(Base):
@@ -100,6 +107,21 @@ class DeliveryLog(Base):
     provider_message_id: Mapped[str | None] = mapped_column(String(150), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     sent_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    delivery_intent_key: Mapped[str] = mapped_column(String(40), index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1)
+    retryable: Mapped[bool] = mapped_column(Boolean, default=True)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("delivery_intent_key", "attempt_number", name="uq_delivery_logs_intent_attempt"),
+        Index("ux_delivery_logs_idempotency_key", "idempotency_key", unique=True),
+        CheckConstraint(
+            "status IN ('PREPARED','SENDING','SENT','DELIVERED','FAILED')",
+            name="ck_delivery_logs_status",
+        ),
+    )
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

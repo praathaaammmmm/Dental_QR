@@ -8,6 +8,7 @@ os.environ["SESSION_SECRET_KEY"] = "test-session-secret-that-is-long-enough"
 os.environ["SESSION_HTTPS_ONLY"] = "false"
 os.environ["DATABASE_URL"] = "sqlite:///./test_smritiraj.db"
 os.environ["ALLOWED_HOSTS"] = "testserver"
+os.environ["N8N_WEBHOOK_SECRET"] = "test-n8n-webhook-secret"
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import Base, engine

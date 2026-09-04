@@ -17,6 +17,8 @@
   <li><a href="/admin/dashboard">Admin CRM</a></li><li aria-current="page">Staff</li>
 {% elif path.startswith('/admin/audit') %}
   <li><a href="/admin/dashboard">Admin CRM</a></li><li aria-current="page">Audit log</li>
+{% elif path.startswith('/admin/services') %}
+  <li><a href="/admin/dashboard">Admin CRM</a></li><li aria-current="page">Services</li>
 {% elif path.startswith('/patients/register') %}
   <li><a href="/patients">CRM</a></li><li><a href="/patients">Patients</a></li><li aria-current="page">Register patient</li>
 {% elif path.startswith('/patients/') %}
@@ -24,7 +26,7 @@
 {% elif path.startswith('/patients') %}
   <li><a href="/patients">CRM</a></li><li aria-current="page">Patients</li>
 {% elif path == '/offers' %}
-  <li><a href="/patients">CRM</a></li><li aria-current="page">Services</li>
+  <li><a href="/patients">CRM</a></li><li aria-current="page">Issued Coupons</li>
 {% elif path.startswith('/redemptions') %}
   <li><a href="/patients">CRM</a></li><li aria-current="page">Redemptions</li>
 {% elif path.startswith('/delivery') %}

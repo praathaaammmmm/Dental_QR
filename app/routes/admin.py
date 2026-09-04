@@ -7,16 +7,60 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.exc import IntegrityError
 from ..auth import require_admin
 from ..models import Campaign, Offer, PatientOffer
+from ..query_params import optional_int
 from ..security import require_csrf
 from ..audit_service import audit
 from ..models import StaffUser, AuditLog
 from ..auth import password_hasher
 from ..services.analytics_service import (
     campaign_performance, daily_time_series, dashboard_summary, delivery_summary,
-    patient_export_rows, staff_performance,
+    patient_export_rows, registrations_by_category, staff_performance,
 )
 
 router = APIRouter(prefix="/admin")
+
+@router.get("/services")
+def service_list(request: Request):
+    guard = require_admin(request)
+    if guard: return guard
+    db = request.app.state.db()
+    try:
+        rows = db.query(Offer).order_by(Offer.name).all()
+        return request.app.state.templates.TemplateResponse(request, "services.html", {"request": request, "rows": rows})
+    finally: db.close()
+
+@router.post("/services")
+def create_service(request: Request, name: str = Form(...), description: str = Form(...), _csrf: None = Depends(require_csrf)):
+    guard = require_admin(request)
+    if guard: return guard
+    db = request.app.state.db()
+    try:
+        offer = Offer(name=" ".join(name.split()), description=description.strip(), active=True)
+        db.add(offer)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return RedirectResponse("/admin/services?message=A service with that name already exists", status_code=303)
+        audit(db, request.session.get("user", "admin"), "SERVICE_CREATED", details={"name": offer.name})
+        db.commit()
+        return RedirectResponse("/admin/services?message=Service created", status_code=303)
+    finally: db.close()
+
+@router.post("/services/{offer_id}/toggle")
+def toggle_service(request: Request, offer_id: int, _csrf: None = Depends(require_csrf)):
+    guard = require_admin(request)
+    if guard: return guard
+    db = request.app.state.db()
+    try:
+        offer = db.get(Offer, offer_id)
+        if not offer:
+            return RedirectResponse("/admin/services?message=Service not found", status_code=303)
+        offer.active = not offer.active
+        audit(db, request.session.get("user", "admin"), "SERVICE_UPDATED", details={"name": offer.name, "active": offer.active})
+        db.commit()
+        return RedirectResponse("/admin/services?message=Service updated", status_code=303)
+    finally: db.close()
 
 @router.get("/audit")
 def audit_log(request: Request):
@@ -69,9 +113,10 @@ def toggle_staff(request: Request, staff_id: int, _csrf: None = Depends(require_
     finally: db.close()
 
 @router.get("/reports/campaigns.csv")
-def campaign_report(request: Request, campaign_id: int | None = None, offer_id: int | None = None, start: str = Query(""), end: str = Query("")):
+def campaign_report(request: Request, campaign_id: str = Query(""), offer_id: str = Query(""), start: str = Query(""), end: str = Query("")):
     guard = require_admin(request)
     if guard: return guard
+    campaign_id, offer_id = optional_int(campaign_id), optional_int(offer_id)
     db = request.app.state.db()
     try:
         output = StringIO()
@@ -92,9 +137,10 @@ def counts(db, campaign_id=None, offer_id=None, start=None, end=None):
     return summary["issued"], summary["redeemed"], summary["expired"]
 
 @router.get("/dashboard")
-def dashboard(request: Request, campaign_id: int | None = None, offer_id: int | None = None, start: str = Query(""), end: str = Query("")):
+def dashboard(request: Request, campaign_id: str = Query(""), offer_id: str = Query(""), start: str = Query(""), end: str = Query("")):
     guard = require_admin(request)
     if guard: return guard
+    campaign_id, offer_id = optional_int(campaign_id), optional_int(offer_id)
     db = request.app.state.db()
     try:
         start_date = date.fromisoformat(start) if start else None
@@ -116,25 +162,27 @@ def dashboard(request: Request, campaign_id: int | None = None, offer_id: int | 
             "whatsapp_rate": round(deliveries["whatsapp_sent"] * 100 / deliveries["whatsapp_total"], 1) if deliveries["whatsapp_total"] else 0,
             "time_series": daily_time_series(db, campaign_id, offer_id, start_date, end_date),
             "staff_performance": staff_performance(db, start_date, end_date),
+            "category_breakdown": registrations_by_category(db, campaign_id, offer_id, start_date, end_date),
             "report_query": report_query,
         })
     finally: db.close()
 
 
 @router.get("/reports/patients.csv")
-def patient_report(request: Request, campaign_id: int | None = None, offer_id: int | None = None, start: str = Query(""), end: str = Query("")):
+def patient_report(request: Request, campaign_id: str = Query(""), offer_id: str = Query(""), start: str = Query(""), end: str = Query("")):
     guard = require_admin(request)
     if guard:
         return guard
+    campaign_id, offer_id = optional_int(campaign_id), optional_int(offer_id)
     db = request.app.state.db()
     try:
         start_date = date.fromisoformat(start) if start else None
         end_date = date.fromisoformat(end) if end else None
         output = StringIO()
         writer = csv.writer(output)
-        writer.writerow(["Patient ID", "Patient", "Mobile", "Email", "Age", "Gender", "Campaign", "Service", "Registration ID", "Registered", "Expires", "Status", "Redeemed", "Redeemed by"])
+        writer.writerow(["Patient ID", "Patient", "Mobile", "Email", "Age", "Gender", "Campaign", "Service", "Beneficiary Category", "Registration ID", "Registered", "Expires", "Status", "Redeemed", "Redeemed by"])
         for row in patient_export_rows(db, campaign_id, offer_id, start_date, end_date):
-            writer.writerow([row["patient_uid"], row["full_name"], row["mobile"], row["email"], row["age"], row["gender"], row["campaign"], row["service"], row["coupon_uid"], row["created_at"], row["expires_at"], row["status"], row["redeemed_at"], row["redeemed_by"]])
+            writer.writerow([row["patient_uid"], row["full_name"], row["mobile"], row["email"], row["age"], row["gender"], row["campaign"], row["service"], row["beneficiary_category"], row["coupon_uid"], row["created_at"], row["expires_at"], row["status"], row["redeemed_at"], row["redeemed_by"]])
         output.seek(0)
         return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=patient-registrations.csv"})
     finally:
@@ -151,7 +199,7 @@ def campaigns(request: Request):
         for campaign in rows:
             issued, redeemed, expired = counts(db, campaign.id)
             performance.append({"campaign": campaign, "issued": issued, "redeemed": redeemed, "expired": expired, "conversion": round(redeemed * 100 / issued, 1) if issued else 0})
-        return request.app.state.templates.TemplateResponse(request, "campaigns.html", {"request": request, "rows": rows, "performance": performance, "offers": db.query(Offer).order_by(Offer.name).all()})
+        return request.app.state.templates.TemplateResponse(request, "campaigns.html", {"request": request, "rows": rows, "performance": performance, "offers": db.query(Offer).filter(Offer.active == True).order_by(Offer.name).all()})
     finally: db.close()
 
 @router.post("/campaigns")
