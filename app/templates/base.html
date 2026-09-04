@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}Smriti Raj Dentistry{% endblock %} · Dentistry Ops</title>
+  <link rel="icon" type="image/png" href="/static/img/smriti-raj-dentistry.png">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/cursor.css">
 </head>
 <body class="{% if request.session.get('user') %}portal-body{% else %}login-body{% endif %}">
 {% if request.session.get("user") %}
 {% include "includes/sidebar.html" %}
-<header class="mobile-header"><button type="button" class="menu-button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">☰</button><span>Smriti Raj Dentistry</span></header>
+<header class="mobile-header"><button type="button" class="menu-button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">☰</button><img src="/static/img/smriti-raj-dentistry.png" alt="Smriti Raj Dentistry"></header>
 <header class="top-header"><strong>{% block section_title %}Operations{% endblock %}</strong><div><span aria-hidden="true">♢</span><span aria-hidden="true">?</span><span class="staff-avatar">SR</span></div></header>
 {% endif %}
 <main class="{% if request.session.get('user') %}app-main{% else %}login-main{% endif %}">

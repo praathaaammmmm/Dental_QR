@@ -27,7 +27,7 @@ py -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Generate secure centralized-login values:
+Generate secure admin/clinic-login values:
 
 ```powershell
 py scripts/create_clinic_credentials.py
@@ -53,9 +53,22 @@ API docs:
 http://127.0.0.1:8000/docs
 ```
 
-## Centralized clinic login
+## Authentication and account setup
 
-The default username is `smritiraj-clinic`; it can be changed with `CLINIC_USERNAME`. The application accepts only an Argon2 password hash from `CLINIC_PASSWORD_HASH` and refuses to start when the hash or session secret is missing. Production also requires HTTPS-only session cookies.
+The application has two separate login mechanisms. They are intentionally not interchangeable.
+
+### Admin / Clinic Login (`/login`)
+
+This is the single administrator account for the Admin CRM, campaign management, analytics, staff management, and other admin-only functions. Its credentials come only from the environment:
+
+- `CLINIC_USERNAME`
+- `CLINIC_PASSWORD_HASH` (an Argon2 hash)
+
+Use `py scripts/create_clinic_credentials.py` to generate the values, then place them in the local `.env` file or your deployment environment. The default username is `smritiraj-clinic`. This account is not stored in `staff_users`, so adding a record to the database will not make it valid at `/login`.
+
+### Staff Login (`/staff/login`)
+
+This is for hospital staff who register patients and validate or redeem QR offers. Staff credentials are stored as Argon2 password hashes in the `staff_users` database table. An administrator creates and manages these accounts in **Admin CRM → Staff**. A staff account cannot be used at `/login`; it must use `/staff/login`.
 
 ## Development seed data
 
