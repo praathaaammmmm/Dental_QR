@@ -4,7 +4,9 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import or_
 from ..auth import require_admin
 from ..audit_service import audit
+from ..beneficiary_categories import SELECTABLE_CATEGORIES
 from ..models import Patient, PatientOffer, Offer, Campaign, AuditLog
+from ..query_params import optional_int
 from ..security import require_csrf
 from ..time_utils import utc_now
 from ..services.registration_service import RegistrationError, register_patient_offer
@@ -15,9 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/patients")
-def patients(request: Request, q: str = Query("", max_length=100), status: str = "", offer_id: int | None = None):
+def patients(request: Request, q: str = Query("", max_length=100), status: str = "", offer_id: str = Query("")):
     guard = require_admin(request)
     if guard: return guard
+    offer_id = optional_int(offer_id)
     db = request.app.state.db()
     try:
         query = db.query(PatientOffer).join(Patient).join(Offer)
@@ -41,9 +44,12 @@ def register_page(request: Request):
     if guard: return guard
     db = request.app.state.db()
     try:
-        offers = db.query(Offer).order_by(Offer.id).all()
+        offers = db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all()
         campaigns = db.query(Campaign).filter(Campaign.status == "ACTIVE").order_by(Campaign.start_date.desc()).all()
-        return request.app.state.templates.TemplateResponse(request, "register.html", {"request": request, "offers": offers, "campaigns": campaigns, "error": None})
+        return request.app.state.templates.TemplateResponse(request, "register.html", {
+            "request": request, "offers": offers, "campaigns": campaigns, "error": None,
+            "beneficiary_categories": SELECTABLE_CATEGORIES, "selected_category": "",
+        })
     finally:
         db.close()
 
@@ -60,6 +66,7 @@ def register_patient(
     campaign_name: str = Form(""),
     campaign_id: int | None = Form(None),
     offer_id: int = Form(...),
+    beneficiary_category: str = Form(""),
     consent_given: bool = Form(False),
     _csrf: None = Depends(require_csrf),
 ):
@@ -70,20 +77,26 @@ def register_patient(
         coupon = register_patient_offer(
             db, full_name=full_name, mobile=mobile, email=email, age=age, gender=gender,
             city=city, doctor_name=doctor_name, campaign_name=campaign_name,
-            campaign_id=campaign_id, offer_id=offer_id, consent_given=consent_given,
-            actor=request.session.get("user", "admin"),
+            campaign_id=campaign_id, offer_id=offer_id, beneficiary_category=beneficiary_category,
+            consent_given=consent_given, actor=request.session.get("user", "admin"),
         )
         return RedirectResponse(f"/patients/{coupon.patient_id}", status_code=303)
     except RegistrationError as exc:
-        offers = db.query(Offer).order_by(Offer.id).all()
+        offers = db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all()
         campaigns = db.query(Campaign).filter(Campaign.status == "ACTIVE").order_by(Campaign.start_date.desc()).all()
-        return request.app.state.templates.TemplateResponse(request, "register.html", {"request": request, "offers": offers, "campaigns": campaigns, "error": str(exc)}, status_code=422)
+        return request.app.state.templates.TemplateResponse(request, "register.html", {
+            "request": request, "offers": offers, "campaigns": campaigns, "error": str(exc),
+            "beneficiary_categories": SELECTABLE_CATEGORIES, "selected_category": beneficiary_category,
+        }, status_code=422)
     except Exception:
         logger.exception("Patient registration failed")
         db.rollback()
-        offers = db.query(Offer).order_by(Offer.id).all()
+        offers = db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all()
         campaigns = db.query(Campaign).filter(Campaign.status == "ACTIVE").order_by(Campaign.start_date.desc()).all()
-        return request.app.state.templates.TemplateResponse(request, "register.html", {"request": request, "offers": offers, "campaigns": campaigns, "error": "Registration could not be completed. Please try again."}, status_code=500)
+        return request.app.state.templates.TemplateResponse(request, "register.html", {
+            "request": request, "offers": offers, "campaigns": campaigns, "error": "Registration could not be completed. Please try again.",
+            "beneficiary_categories": SELECTABLE_CATEGORIES, "selected_category": beneficiary_category,
+        }, status_code=500)
     finally:
         db.close()
 @router.get("/patients/{patient_id}")

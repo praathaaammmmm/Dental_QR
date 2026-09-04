@@ -2,6 +2,8 @@ import re
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from .beneficiary_categories import SELECTABLE_VALUES
+
 class PatientCreate(BaseModel):
     full_name: str = Field(min_length=1, max_length=150)
     mobile: str = Field(min_length=5, max_length=30)
@@ -12,6 +14,7 @@ class PatientCreate(BaseModel):
     doctor_name: str | None = Field(default=None, max_length=150)
     campaign_name: str | None = Field(default=None, max_length=150)
     offer_id: int = Field(gt=0)
+    beneficiary_category: str
     consent_given: bool
 
     @field_validator("full_name")
@@ -28,6 +31,14 @@ class PatientCreate(BaseModel):
         value = re.sub(r"[\s()-]", "", v)
         if not re.fullmatch(r"\+?\d{7,15}", value):
             raise ValueError("Enter a valid mobile number")
+        return value
+
+    @field_validator("beneficiary_category")
+    @classmethod
+    def clean_beneficiary_category(cls, value):
+        value = (value or "").strip()
+        if value not in SELECTABLE_VALUES:
+            raise ValueError("Select a valid beneficiary category")
         return value
 
     @field_validator("gender", "city", "doctor_name", "campaign_name", mode="before")

@@ -18,6 +18,7 @@ def _register(db, mobile="9999999977"):
         campaign_name="",
         campaign_id=1,
         offer_id=1,
+        beneficiary_category="CGHS",
         consent_given=True,
         actor="admin",
     )

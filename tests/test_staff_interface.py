@@ -48,7 +48,7 @@ def test_staff_registration_uses_active_campaign_and_audits_actor(client):
         "/staff/register",
         data={
             "full_name": "Staff Registered Patient", "mobile": "9876543210",
-            "campaign_id": "1", "offer_id": "1", "consent_given": "true",
+            "campaign_id": "1", "offer_id": "1", "beneficiary_category": "ECHS", "consent_given": "true",
         },
         follow_redirects=False,
     )

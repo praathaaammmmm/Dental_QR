@@ -1,7 +1,7 @@
 {% set path = request.url.path %}
 <nav class="crm-tabs" aria-label="CRM navigation">
   <a class="{% if path.startswith('/patients') %}active{% endif %}" href="/patients"{% if path.startswith('/patients') %} aria-current="page"{% endif %}>Patients</a>
-  <a class="{% if path == '/offers' %}active{% endif %}" href="/offers"{% if path == '/offers' %} aria-current="page"{% endif %}>Services</a>
+  <a class="{% if path.startswith('/admin/services') %}active{% endif %}" href="/admin/services"{% if path.startswith('/admin/services') %} aria-current="page"{% endif %}>Services</a>
   <a class="{% if path.startswith('/redemptions') %}active{% endif %}" href="/redemptions"{% if path.startswith('/redemptions') %} aria-current="page"{% endif %}>Redemptions</a>
   <a class="{% if path.startswith('/delivery') %}active{% endif %}" href="/delivery"{% if path.startswith('/delivery') %} aria-current="page"{% endif %}>Delivery</a>
 </nav>

@@ -3,11 +3,11 @@ from app.database import SessionLocal
 from app.models import PatientOffer
 from app.qr_service import token_for, token_hash
 
-def registration(name, mobile, offer="1", consent="true"):
-    return {"full_name": name, "mobile": mobile, "campaign_id": "1", "offer_id": offer, "consent_given": consent}
+def registration(name, mobile, offer="1", consent="true", beneficiary_category="CGHS"):
+    return {"full_name": name, "mobile": mobile, "campaign_id": "1", "offer_id": offer, "consent_given": consent, "beneficiary_category": beneficiary_category}
 
 def test_patient_registration_and_qr(client):
-    r = client.post("/patients/register", data={"full_name":"Test Patient", "mobile":"9999999999", "email":"", "age":"30", "gender":"Male", "city":"Delhi", "doctor_name":"", "campaign_name":"Test", "campaign_id":"1", "offer_id":"1", "consent_given":"true"}, follow_redirects=False)
+    r = client.post("/patients/register", data={"full_name":"Test Patient", "mobile":"9999999999", "email":"", "age":"30", "gender":"Male", "city":"Delhi", "doctor_name":"", "campaign_name":"Test", "campaign_id":"1", "offer_id":"1", "beneficiary_category":"CGHS", "consent_given":"true"}, follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"].startswith("/patients/")
     db = SessionLocal(); coupon = db.query(PatientOffer).first()

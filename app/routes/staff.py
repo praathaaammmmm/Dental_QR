@@ -6,6 +6,8 @@ from sqlalchemy import or_, select
 
 from ..audit_service import audit
 from ..auth import require_staff
+from ..beneficiary_categories import SELECTABLE_CATEGORIES
+from ..query_params import optional_int
 from ..coupon_service import redeem_atomic, refresh_expiry
 from ..models import AuditLog, Campaign, Offer, Patient, PatientOffer
 from ..config import VALIDATION_RATE_LIMIT_ATTEMPTS, VALIDATION_RATE_LIMIT_WINDOW_SECONDS
@@ -57,8 +59,9 @@ def register_page(request: Request):
     db = request.app.state.db()
     try:
         return request.app.state.templates.TemplateResponse(request, "register.html", _context(
-            request, offers=db.query(Offer).order_by(Offer.id).all(), campaigns=_active_campaigns(db), error=None,
+            request, offers=db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all(), campaigns=_active_campaigns(db), error=None,
             form_action="/staff/register", back_url="/staff/home",
+            beneficiary_categories=SELECTABLE_CATEGORIES, selected_category="",
         ))
     finally:
         db.close()
@@ -69,6 +72,7 @@ def register_patient(
     request: Request, full_name: str = Form(...), mobile: str = Form(...), email: str = Form(""),
     age: str = Form(""), gender: str = Form(""), city: str = Form(""), doctor_name: str = Form(""),
     campaign_name: str = Form(""), campaign_id: int | None = Form(None), offer_id: int = Form(...),
+    beneficiary_category: str = Form(""),
     consent_given: bool = Form(False), _csrf: None = Depends(require_csrf),
 ):
     guard = require_staff(request)
@@ -80,7 +84,7 @@ def register_patient(
             coupon = register_patient_offer(
                 db, full_name=full_name, mobile=mobile, email=email, age=age, gender=gender, city=city,
                 doctor_name=doctor_name, campaign_name=campaign_name, campaign_id=campaign_id, offer_id=offer_id,
-                consent_given=consent_given, actor=request.session["user"],
+                beneficiary_category=beneficiary_category, consent_given=consent_given, actor=request.session["user"],
             )
             return RedirectResponse(f"/staff/patients/{coupon.patient_id}", status_code=303)
         except RegistrationError as exc:
@@ -89,8 +93,9 @@ def register_patient(
             db.rollback()
             error, status_code = "Registration could not be completed. Please try again.", 500
         return request.app.state.templates.TemplateResponse(request, "register.html", _context(
-            request, offers=db.query(Offer).order_by(Offer.id).all(), campaigns=_active_campaigns(db), error=error,
+            request, offers=db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all(), campaigns=_active_campaigns(db), error=error,
             form_action="/staff/register", back_url="/staff/home",
+            beneficiary_categories=SELECTABLE_CATEGORIES, selected_category=beneficiary_category,
         ), status_code=status_code)
     finally:
         db.close()
@@ -98,12 +103,13 @@ def register_patient(
 
 @router.get("/staff/patients")
 def patients(
-    request: Request, q: str = Query("", max_length=100), status: str = "", campaign_id: int | None = None,
+    request: Request, q: str = Query("", max_length=100), status: str = "", campaign_id: str = Query(""),
     start: str = "", end: str = "",
 ):
     guard = require_staff(request)
     if guard:
         return guard
+    campaign_id = optional_int(campaign_id)
     db = request.app.state.db()
     try:
         query = db.query(PatientOffer).join(Patient).join(Offer)

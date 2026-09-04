@@ -171,6 +171,23 @@ Keep the key outside the backup directory and copy encrypted artifacts to a
 separate protected location. The SQLite backup job intentionally refuses a
 non-SQLite database; use the managed PostgreSQL backup process after migration.
 
+## QR delivery dispatch and expiry sweep jobs
+
+Two more externally scheduled jobs, run the same way as the backup job:
+
+```powershell
+py -m app.delivery_job
+py -m app.expiry_job
+```
+
+`app.delivery_job` sends queued QR notifications (registration, manual resend, and
+retries) to n8n and must run every **1 minute** in production-like environments — it is
+the only place the app makes outbound delivery HTTP calls; registration and manual resend
+only ever write a durable `PREPARED` record. `app.expiry_job` expires stale QR offers and
+triggers 24–48h expiry reminders; running it every few minutes is sufficient. See
+`docs/blueprint/n8n-delivery-contract.md` for the full delivery payload/callback contract,
+required for whoever builds the actual n8n workflows.
+
 ## Database migrations
 
 Local development may create SQLite tables automatically for convenience. Staging and production never create tables at application startup; apply Alembic migrations first:

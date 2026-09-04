@@ -8,6 +8,7 @@ from sqlalchemy import text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from .auth import is_authenticated
+from .beneficiary_categories import CATEGORY_LABELS
 from .database import Base, engine, SessionLocal
 from .models import Offer
 from .config import ALLOWED_HOSTS, APP_ENV, SESSION_MAX_AGE_SECONDS, SESSION_HTTPS_ONLY, SESSION_SECRET_KEY, validate_security_config
@@ -54,6 +55,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 templates.env.globals["csrf_token"] = get_csrf_token
 templates.env.filters["clinic_time"] = format_clinic_time
+templates.env.filters["category_label"] = lambda value: CATEGORY_LABELS.get(value, value)
 app.state.templates = templates
 app.state.db = SessionLocal
 

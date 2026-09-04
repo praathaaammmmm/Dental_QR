@@ -9,8 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .audit_service import audit
+from .config import PUBLIC_BASE_URL
 from .models import AuditLog, PatientOffer
 from .n8n_service import trigger_delivery
+from .services.delivery_service import CALLBACK_PATH, new_key
 from .time_utils import utc_now
 
 SYSTEM_ACTOR = "system:expiry-sweep"
@@ -30,6 +32,8 @@ def _reminder_payload(coupon: PatientOffer) -> dict:
     patient = coupon.patient
     return {
         "event": "REGISTRATION_EXPIRY_REMINDER",
+        "idempotency_key": new_key("dlv"),
+        "delivery_intent_key": new_key("int"),
         "registration_id": coupon.coupon_uid,
         "patient": {
             "name": patient.full_name,
@@ -39,6 +43,7 @@ def _reminder_payload(coupon: PatientOffer) -> dict:
         "service": coupon.offer.name,
         "campaign": coupon.campaign.name if coupon.campaign else patient.campaign_name,
         "expires_at": coupon.expires_at.isoformat(),
+        "callback_url": f"{PUBLIC_BASE_URL}{CALLBACK_PATH}",
     }
 
 

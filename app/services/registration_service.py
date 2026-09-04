@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..audit_service import audit
 from ..models import Campaign, Offer, Patient, PatientOffer
 from ..qr_service import expiry_for, generate_qr, new_uid, token_for, token_hash
+from .delivery_service import queue_registration_deliveries
 from ..schemas import PatientCreate
 from ..time_utils import utc_now
 
@@ -56,13 +57,15 @@ def register_patient_offer(
     campaign_name: str,
     campaign_id: int | None,
     offer_id: int,
+    beneficiary_category: str,
     consent_given: bool,
     actor: str,
 ) -> PatientOffer:
     """Create a patient and its legacy PatientOffer in one transaction.
 
     This deliberately preserves the existing weekly duplicate rule and QR/audit
-    behavior. Notification dispatch remains a separate staff-triggered workflow.
+    behavior. Notification delivery is queued durably (PREPARED DeliveryLog rows) in
+    the same transaction; actual sending happens later via the delivery dispatcher.
     """
     form = _validated_form(
         full_name=full_name,
@@ -74,6 +77,7 @@ def register_patient_offer(
         doctor_name=doctor_name or None,
         campaign_name=campaign_name or None,
         offer_id=offer_id,
+        beneficiary_category=beneficiary_category,
         consent_given=consent_given,
     )
     try:
@@ -118,15 +122,20 @@ def register_patient_offer(
             coupon_uid=coupon_uid, patient_id=patient.id, offer_id=offer.id,
             campaign_id=campaign.id, secure_token_hash=token_hash(token),
             created_at=now, expires_at=expiry_for(now), status="ACTIVE",
+            beneficiary_category=form.beneficiary_category,
         )
         db.add(coupon)
         db.flush()
         generate_qr(token, coupon.coupon_uid)
         audit(db, actor, "PATIENT_REGISTERED", coupon.id, patient.id, {
             "offer": offer.name, "registration_week": str(registration_week),
-            "consent_version": CONSENT_VERSION,
+            "consent_version": CONSENT_VERSION, "beneficiary_category": form.beneficiary_category,
         })
         audit(db, "admin", "QR_GENERATED", coupon.id, patient.id)
+        # Durable outbox write only — no network call happens here, so a slow or unavailable
+        # n8n endpoint can never block or roll back this registration. The dispatcher
+        # (app/delivery_job.py) sends these PREPARED intents separately.
+        queue_registration_deliveries(db, patient, coupon, actor)
         db.commit()
         return coupon
     except IntegrityError as exc:

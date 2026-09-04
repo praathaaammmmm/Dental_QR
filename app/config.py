@@ -25,6 +25,9 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("
 HOSPITAL_NAME = os.getenv("HOSPITAL_NAME", "Smriti Raj Dentistry")
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "")
 N8N_WEBHOOK_SECRET = os.getenv("N8N_WEBHOOK_SECRET", "")
+N8N_DELIVERY_MAX_RETRIES = int(os.getenv("N8N_DELIVERY_MAX_RETRIES", "3"))
+DELIVERY_STALE_SENDING_SECONDS = int(os.getenv("DELIVERY_STALE_SENDING_SECONDS", "300"))
+N8N_WEBHOOK_LEGACY_CALLBACK_COMPAT = os.getenv("N8N_WEBHOOK_LEGACY_CALLBACK_COMPAT", "false").lower() == "true"
 SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
@@ -69,5 +72,9 @@ def validate_security_config() -> None:
         errors.append("Validation rate-limit settings must be positive")
     if BACKUP_RETENTION_DAYS < 1:
         errors.append("BACKUP_RETENTION_DAYS must be at least 1")
+    if N8N_DELIVERY_MAX_RETRIES < 1:
+        errors.append("N8N_DELIVERY_MAX_RETRIES must be at least 1")
+    if DELIVERY_STALE_SENDING_SECONDS < 1:
+        errors.append("DELIVERY_STALE_SENDING_SECONDS must be at least 1")
     if errors:
         raise RuntimeError("Invalid security configuration: " + "; ".join(errors))

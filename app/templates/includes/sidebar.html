@@ -11,7 +11,7 @@
   <nav class="side-nav" aria-label="Main navigation">
     {% if request.session.get('role', 'admin') == 'admin' %}
       {% set admin_crm_active = path.startswith('/admin/dashboard') or path.startswith('/admin/campaigns') %}
-      {% set crm_active = path.startswith('/patients') or path == '/offers' or path.startswith('/redemptions') or path.startswith('/delivery') %}
+      {% set crm_active = path.startswith('/patients') or path == '/offers' or path.startswith('/admin/services') or path.startswith('/redemptions') or path.startswith('/delivery') %}
       <a class="{% if admin_crm_active %}active{% endif %}" href="/admin/dashboard"{% if admin_crm_active %} aria-current="page"{% endif %}><span>◈</span>Admin CRM</a>
       <a class="{% if path.startswith('/admin/staff') %}active{% endif %}" href="/admin/staff"{% if path.startswith('/admin/staff') %} aria-current="page"{% endif %}><span>♟</span>Staff</a>
       <a class="{% if path.startswith('/admin/audit') %}active{% endif %}" href="/admin/audit"{% if path.startswith('/admin/audit') %} aria-current="page"{% endif %}><span>◷</span>Audit log</a>
@@ -19,7 +19,7 @@
         <summary><span>♙</span>CRM <b aria-hidden="true">⌄</b></summary>
         <div class="nav-dropdown-items">
           <a class="{% if path.startswith('/patients') %}active{% endif %}" href="/patients"{% if path.startswith('/patients') %} aria-current="page"{% endif %}>Patients</a>
-          <a class="{% if path == '/offers' %}active{% endif %}" href="/offers"{% if path == '/offers' %} aria-current="page"{% endif %}>Services</a>
+          <a class="{% if path.startswith('/admin/services') %}active{% endif %}" href="/admin/services"{% if path.startswith('/admin/services') %} aria-current="page"{% endif %}>Services</a>
           <a class="{% if path.startswith('/redemptions') %}active{% endif %}" href="/redemptions"{% if path.startswith('/redemptions') %} aria-current="page"{% endif %}>Redemptions</a>
           <a class="{% if path.startswith('/delivery') %}active{% endif %}" href="/delivery"{% if path.startswith('/delivery') %} aria-current="page"{% endif %}>Delivery</a>
         </div>

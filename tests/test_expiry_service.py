@@ -10,7 +10,7 @@ from app.time_utils import utc_now
 def _register(client, name: str, mobile: str):
     response = client.post("/patients/register", data={
         "full_name": name, "mobile": mobile, "campaign_id": "1",
-        "offer_id": "1", "consent_given": "true",
+        "offer_id": "1", "beneficiary_category": "CGHS", "consent_given": "true",
     })
     assert response.status_code == 200
 
