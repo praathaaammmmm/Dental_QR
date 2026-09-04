@@ -1,6 +1,13 @@
 {% set path = request.url.path %}
+{% if request.session.get('role') == 'staff' %}
+  {% set brand_href = '/staff/home' %}
+{% elif request.session.get('role') == 'admin' %}
+  {% set brand_href = '/admin/dashboard' %}
+{% else %}
+  {% set brand_href = '/login' %}
+{% endif %}
 <aside class="sidebar" id="sidebar">
-  <a class="brand" href="{{ '/staff/home' if request.session.get('role') == 'staff' else '/' }}" aria-label="Smriti Raj Dentistry home"><span class="brand-mark" aria-hidden="true">◆</span><span><b>Smriti Raj</b><small>Dentistry Ops</small></span></a>
+  <a class="brand" href="{{ brand_href }}"><img src="/static/img/smriti-raj-dentistry.png" alt="Smriti Raj Dentistry"></a>
   <nav class="side-nav" aria-label="Main navigation">
     {% if request.session.get('role', 'admin') == 'admin' %}
       {% set admin_crm_active = path.startswith('/admin/dashboard') or path.startswith('/admin/campaigns') %}

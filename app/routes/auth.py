@@ -65,8 +65,11 @@ def staff_login_page(request: Request):
         return RedirectResponse("/staff/home", status_code=303)
     return request.app.state.templates.TemplateResponse(request, "login.html", {
         "request": request, "error": None, "login_action": "/staff/login",
-        "login_title": "Staff workspace login",
+        "login_title": "Staff Login",
         "login_lead": "Sign in to register patients and manage QR redemptions.",
+        "username_label": "Staff username",
+        "username_placeholder": "Enter staff username",
+        "login_help": "Use the staff account created by an administrator in Admin CRM.",
     })
 
 
@@ -75,8 +78,11 @@ def staff_login(request: Request, username: str = Form(...), password: str = For
     request_key = client_key(request)
     context = {
         "request": request, "login_action": "/staff/login",
-        "login_title": "Staff workspace login",
+        "login_title": "Staff Login",
         "login_lead": "Sign in to register patients and manage QR redemptions.",
+        "username_label": "Staff username",
+        "username_placeholder": "Enter staff username",
+        "login_help": "Use the staff account created by an administrator in Admin CRM.",
     }
     if _is_rate_limited(request_key):
         return request.app.state.templates.TemplateResponse(request, "login.html", {
