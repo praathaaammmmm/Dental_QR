@@ -34,15 +34,19 @@ Render dashboard → **New** → **Web Service** → connect this repository.
 | Root Directory | `smritiraj_qr_system` |
 | Environment | Docker |
 | Dockerfile Path | `Dockerfile` (relative to Root Directory) |
-| Docker Command (override) | `sh -c "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"` |
+| Docker Command (override) | leave blank — do not set one |
 | Plan | Free |
 | Health Check Path | `/ready` |
 | Auto-Deploy | On commit to `main` (or off, your choice) |
 
-The Docker Command override is required: the repository's `Dockerfile` alone only starts
-`uvicorn`, and `app/main.py` deliberately skips `Base.metadata.create_all` when
-`APP_ENV=production` (schema changes must go through Alembic in production) — without the
-`alembic upgrade head` step the database has no tables and every request fails.
+Leave the Docker Command override **blank**. The repository's `Dockerfile` already runs
+`alembic upgrade head` and then execs `uvicorn` as its own `CMD` — `app/main.py`
+deliberately skips `Base.metadata.create_all` when `APP_ENV=production` (schema changes
+must go through Alembic in production), and the migration step now lives in the image
+itself rather than a dashboard field. Do not paste a Docker Command override here: Render
+does not shell-interpret that field the way a local terminal does, so a string containing
+`&&` gets passed to `alembic` as a literal argument instead of chaining two commands —
+that was the actual cause of an earlier deploy failure, not a Dockerfile problem.
 
 If you'd rather not use Docker, a native Python environment also works with:
 - Build Command: `pip install -r requirements.txt`
