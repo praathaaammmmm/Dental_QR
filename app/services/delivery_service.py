@@ -171,14 +171,15 @@ def dispatch_pending_deliveries(db: Session, now: datetime | None = None) -> dic
     """One dispatcher tick: recover stale SENDING rows, claim PREPARED rows, send them.
 
     Safe to run every minute from an external scheduler (``app/delivery_job.py``).
-    When n8n is not configured, PREPARED rows are left untouched — nothing is claimed,
-    so nothing can be falsely marked SENT or FAILED.
+    Every visible PREPARED row is always claimed and attempted, regardless of whether
+    n8n is configured — ``trigger_delivery`` reports a clear "N8N_WEBHOOK_URL is not
+    configured" failure per row rather than the dispatcher silently skipping rows, so a
+    missing/misconfigured n8n URL is never mistaken for "nothing to deliver". Since the
+    resulting FAILED rows stay retryable, fixing the configuration self-heals them on the
+    next retry tick without manual intervention.
     """
     now = now or utc_now()
     stale_recovered = _recover_stale_sending(db, now)
-
-    if not N8N_WEBHOOK_URL:
-        return {"claimed": 0, "sent": 0, "failed": 0, "stale_recovered": stale_recovered}
 
     claimed_ids = _claim_prepared_rows(db, now)
     sent = failed = 0

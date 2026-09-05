@@ -107,7 +107,10 @@ def test_category_analytics_respects_existing_filters(client):
         rows[0].created_at = now - timedelta(days=5)
         db.commit()
 
-        breakdown = registrations_by_category(db, start=(now - timedelta(days=1)).date(), end=now.date())
+        # Wide margin around "now" so the Asia/Kolkata-vs-UTC day boundary can never
+        # accidentally exclude "now" itself; the excluded row is 5 days in the past,
+        # well outside this window either way.
+        breakdown = registrations_by_category(db, start=(now - timedelta(days=2)).date(), end=(now + timedelta(days=1)).date())
         counts = {row["value"]: row["count"] for row in breakdown}
         assert counts["CGHS"] == 0
         assert counts["ECHS"] == 1

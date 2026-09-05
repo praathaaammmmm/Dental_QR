@@ -14,7 +14,7 @@ from ..config import VALIDATION_RATE_LIMIT_ATTEMPTS, VALIDATION_RATE_LIMIT_WINDO
 from ..security import client_key, is_rate_limited, record_rate_limit_event, require_csrf
 from ..services.delivery_service import send_qr_delivery
 from ..services.registration_service import RegistrationError, register_patient_offer
-from ..time_utils import utc_now
+from ..time_utils import clinic_date_range_to_utc, utc_now
 from .validation import find_coupon, result_for
 
 router = APIRouter()
@@ -120,10 +120,13 @@ def patients(
         if campaign_id:
             query = query.filter(PatientOffer.campaign_id == campaign_id)
         try:
-            if start:
-                query = query.filter(PatientOffer.created_at >= date.fromisoformat(start))
-            if end:
-                query = query.filter(PatientOffer.created_at < date.fromisoformat(end) + timedelta(days=1))
+            start_date = date.fromisoformat(start) if start else None
+            end_date = date.fromisoformat(end) if end else None
+            start_utc, end_utc = clinic_date_range_to_utc(start_date, end_date)
+            if start_utc:
+                query = query.filter(PatientOffer.created_at >= start_utc)
+            if end_utc:
+                query = query.filter(PatientOffer.created_at < end_utc)
         except ValueError:
             return request.app.state.templates.TemplateResponse(request, "patients.html", _context(
                 request, rows=[], offers=[], campaigns=[], q=q, status=status, campaign_id=campaign_id, start=start, end=end,

@@ -110,7 +110,13 @@ This adds clearly marked development test data:
 - Therefore, two simultaneous redemption requests cannot both transition the same coupon from ACTIVE to REDEEMED.
 - Secrets are loaded from environment variables and are not hard-coded into source.
 
-## Email
+## Email and WhatsApp delivery (n8n)
+
+Actual email/WhatsApp sending is handled by n8n, not FastAPI directly — see
+[`n8n/README.md`](n8n/README.md) for the full setup guide (importing the workflow,
+credentials, dispatcher scheduling, and an end-to-end test checklist), and
+[`docs/blueprint/n8n-delivery-contract.md`](docs/blueprint/n8n-delivery-contract.md) for
+the payload/callback contract.
 
 Local prototype mode prepares/logs the intended email data and QR file; it does not require an email provider.
 

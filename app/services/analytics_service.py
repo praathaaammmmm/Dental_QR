@@ -1,11 +1,17 @@
 """Aggregate, admin-only reporting queries for the CRM dashboard."""
-from datetime import date, timedelta
+from datetime import date
 
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from ..beneficiary_categories import ALL_CATEGORIES
 from ..models import AuditLog, Campaign, DeliveryLog, Offer, Patient, PatientOffer, StaffUser
+from ..time_utils import clinic_date_range_to_utc
+
+# start/end are Asia/Kolkata calendar dates (as entered on the admin dashboard filter form).
+# Every query below converts them to UTC bounds via clinic_date_range_to_utc before comparing
+# against a stored (naive UTC) timestamp column, so this stays consistent with the staff
+# patient list's date filter. end is inclusive of its entire local calendar day.
 
 
 def _offer_conditions(campaign_id=None, offer_id=None, start: date | None = None, end: date | None = None, date_column=None):
@@ -14,10 +20,11 @@ def _offer_conditions(campaign_id=None, offer_id=None, start: date | None = None
         conditions.append(PatientOffer.campaign_id == campaign_id)
     if offer_id:
         conditions.append(PatientOffer.offer_id == offer_id)
-    if start:
-        conditions.append(date_column >= start)
-    if end:
-        conditions.append(date_column < end + timedelta(days=1))
+    start_utc, end_utc = clinic_date_range_to_utc(start, end)
+    if start_utc:
+        conditions.append(date_column >= start_utc)
+    if end_utc:
+        conditions.append(date_column < end_utc)
     return conditions
 
 
@@ -33,10 +40,11 @@ def dashboard_summary(db: Session, campaign_id=None, offer_id=None, start: date 
 
 def delivery_summary(db: Session, campaign_id=None, offer_id=None, start: date | None = None, end: date | None = None) -> dict:
     conditions = _offer_conditions(campaign_id, offer_id, None, None, PatientOffer.created_at)
-    if start:
-        conditions.append(DeliveryLog.sent_at >= start)
-    if end:
-        conditions.append(DeliveryLog.sent_at < end + timedelta(days=1))
+    start_utc, end_utc = clinic_date_range_to_utc(start, end)
+    if start_utc:
+        conditions.append(DeliveryLog.sent_at >= start_utc)
+    if end_utc:
+        conditions.append(DeliveryLog.sent_at < end_utc)
     row = db.execute(select(
         func.coalesce(func.sum(case((DeliveryLog.channel == "EMAIL", 1), else_=0)), 0).label("email_total"),
         func.coalesce(func.sum(case((and_(DeliveryLog.channel == "EMAIL", DeliveryLog.status.in_(["SENT", "DELIVERED"])), 1), else_=0)), 0).label("email_sent"),
@@ -64,10 +72,11 @@ def staff_performance(db: Session, start: date | None = None, end: date | None =
         AuditLog.user == StaffUser.username,
         AuditLog.action.in_(["PATIENT_REGISTERED", "QR_REDEEMED"]),
     ]
-    if start:
-        join_conditions.append(AuditLog.timestamp >= start)
-    if end:
-        join_conditions.append(AuditLog.timestamp < end + timedelta(days=1))
+    start_utc, end_utc = clinic_date_range_to_utc(start, end)
+    if start_utc:
+        join_conditions.append(AuditLog.timestamp >= start_utc)
+    if end_utc:
+        join_conditions.append(AuditLog.timestamp < end_utc)
     rows = db.execute(select(
         StaffUser.id.label("staff_id"), StaffUser.username.label("username"),
         func.coalesce(func.sum(case((AuditLog.action == "PATIENT_REGISTERED", 1), else_=0)), 0).label("registrations"),
