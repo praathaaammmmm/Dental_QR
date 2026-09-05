@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from sqlalchemy.exc import IntegrityError
 
+from app import n8n_service
 from app.database import SessionLocal
 from app.models import DeliveryLog
 from app.services import delivery_service
@@ -88,18 +89,120 @@ def test_failed_dispatch_moves_row_to_failed_and_stays_retryable(client, monkeyp
         db.close()
 
 
-def test_dispatch_with_unconfigured_n8n_leaves_prepared_rows_untouched(client, monkeypatch):
-    monkeypatch.setattr(delivery_service, "N8N_WEBHOOK_URL", "")
+def test_dispatch_with_unconfigured_n8n_claims_rows_and_reports_explicit_failure(client, monkeypatch):
+    """A missing N8N_WEBHOOK_URL must never be indistinguishable from claimed: 0 when
+    PREPARED rows exist — the dispatcher still claims and attempts them, and
+    ``trigger_delivery``'s own guard turns "not configured" into an observable,
+    retryable FAILED row with a clear reason instead of a silent no-op."""
+    monkeypatch.setattr(n8n_service, "N8N_WEBHOOK_URL", "")
 
     db = SessionLocal()
     try:
         coupon = _register(db, "9300000005", email="unconfigured@example.com")
         result = dispatch_pending_deliveries(db, now=utc_now())
-        assert result == {"claimed": 0, "sent": 0, "failed": 0, "stale_recovered": 0}
+        assert result == {"claimed": 2, "sent": 0, "failed": 2, "stale_recovered": 0}
         rows = db.query(DeliveryLog).filter_by(coupon_id=coupon.id).all()
-        assert all(row.status == "PREPARED" for row in rows)
+        assert all(row.status == "FAILED" for row in rows)
+        assert all(row.retryable is True for row in rows)
+        assert all("N8N_WEBHOOK_URL is not configured" in row.failure_reason for row in rows)
     finally:
         db.close()
+
+
+# --- Channel eligibility: a visible PREPARED row must always be claimed and attempted ------
+
+def test_prepared_email_row_is_claimed_and_dispatched_to_n8n(client, monkeypatch):
+    captured = []
+
+    def fake_trigger(payload):
+        captured.append(payload["channel"])
+        return {"status": "SENT", "workflow_id": "exec-email"}
+
+    monkeypatch.setattr(delivery_service, "trigger_delivery", fake_trigger)
+
+    db = SessionLocal()
+    try:
+        coupon = _register(db, "9300000016", email="email-row@example.com")
+        result = dispatch_pending_deliveries(db, now=utc_now())
+        assert result["claimed"] == 2  # email + whatsapp both visible and eligible
+        assert result["sent"] == 2
+        assert "EMAIL" in captured
+
+        email_row = db.query(DeliveryLog).filter_by(coupon_id=coupon.id, channel="EMAIL").one()
+        assert email_row.status == "SENT"
+        assert email_row.n8n_workflow_id == "exec-email"
+    finally:
+        db.close()
+
+
+def test_prepared_whatsapp_row_is_claimed_and_reaches_its_documented_n8n_failure(client, monkeypatch):
+    """The WhatsApp branch of the n8n workflow is a labeled placeholder (see n8n/README.md
+    section E) that always reports a clear, non-permanent failure rather than silently
+    doing nothing — the dispatcher must still claim and hand off the row to reach that
+    path, not skip WhatsApp locally."""
+    def fake_trigger(payload):
+        assert payload["channel"] == "WHATSAPP"
+        return {
+            "status": "FAILED",
+            "reason": "WhatsApp delivery is not yet configured for this clinic.",
+        }
+
+    monkeypatch.setattr(delivery_service, "trigger_delivery", fake_trigger)
+
+    db = SessionLocal()
+    try:
+        coupon = _register(db, "9300000017")  # mobile only -> WHATSAPP row
+        result = dispatch_pending_deliveries(db, now=utc_now())
+        assert result["claimed"] == 1
+        assert result["failed"] == 1
+
+        row = db.query(DeliveryLog).filter_by(coupon_id=coupon.id, channel="WHATSAPP").one()
+        assert row.status == "FAILED"
+        assert row.retryable is True
+        assert "not yet configured" in row.failure_reason
+    finally:
+        db.close()
+
+
+# --- CLI worker must share the exact same database/config as the web app -------------------
+
+def test_cli_delivery_job_uses_the_same_database_and_config_as_the_web_app():
+    from app import delivery_job
+    from app.database import SessionLocal as WebSessionLocal, engine as web_engine
+    from app.database import engine as cli_engine
+
+    assert delivery_job.SessionLocal is WebSessionLocal
+    assert cli_engine is web_engine
+
+
+def test_cli_delivery_job_sees_rows_created_through_the_web_app(client, monkeypatch):
+    """A row visible on the CRM Delivery screen (created via the FastAPI app) must be
+    claimable by a plain `python -m app.delivery_job` run against the same database."""
+    from app import delivery_job
+
+    monkeypatch.setattr(delivery_service, "trigger_delivery", lambda payload: {"status": "SENT", "workflow_id": "exec-cli"})
+
+    db = SessionLocal()
+    try:
+        coupon = _register(db, "9300000018", email="cli-visible@example.com")
+        coupon_id = coupon.id
+    finally:
+        db.close()
+
+    cli_db = delivery_job.SessionLocal()
+    try:
+        result = dispatch_pending_deliveries(cli_db)
+        assert result["claimed"] == 2
+        assert result["sent"] == 2
+    finally:
+        cli_db.close()
+
+    verify_db = SessionLocal()
+    try:
+        rows = verify_db.query(DeliveryLog).filter_by(coupon_id=coupon_id).all()
+        assert all(row.status == "SENT" for row in rows)
+    finally:
+        verify_db.close()
 
 
 # --- Race safety: dispatcher must not overwrite a row a callback already resolved --------

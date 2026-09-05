@@ -2,6 +2,7 @@ from datetime import date, timedelta
 
 from app.database import SessionLocal
 from app.models import Campaign, Offer, PatientOffer
+from app.time_utils import clinic_local_day_start_utc
 from tests.test_staff_interface import _login_as_staff
 
 
@@ -90,10 +91,11 @@ def test_staff_date_range_is_inclusive_of_end_date(client):
     try:
         coupon = db.query(PatientOffer).one()
         boundary_day = date.today() - timedelta(days=3)
-        coupon.created_at = coupon.created_at.replace(
-            year=boundary_day.year, month=boundary_day.month, day=boundary_day.day,
-            hour=23, minute=45,
-        )
+        # created_at is stored as naive UTC. "Just before local (Asia/Kolkata) midnight
+        # at the end of boundary_day" is NOT hour=23/minute=45 in UTC (that lands in the
+        # small hours of the *next* IST calendar day) — it must be computed from the
+        # clinic timezone directly.
+        coupon.created_at = clinic_local_day_start_utc(boundary_day + timedelta(days=1)) - timedelta(seconds=1)
         db.commit()
     finally:
         db.close()

@@ -1,0 +1,359 @@
+{
+  "name": "CRM QR Delivery",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "nodes": [
+    {
+      "id": "1",
+      "name": "CRM Delivery Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-400, 300],
+      "notes": "Production path is /crm-qr-delivery. Copy the production Webhook URL into the CRM's N8N_WEBHOOK_URL setting after activating this workflow. Authenticated with the shared 'CRM Delivery Shared Secret' Header Auth credential (X-N8N-Webhook-Secret) — this must hold the same value as the CRM's N8N_WEBHOOK_SECRET.",
+      "webhookId": "crm-qr-delivery",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-qr-delivery",
+        "responseMode": "onReceived",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "CRM Delivery Shared Secret"
+        }
+      }
+    },
+    {
+      "id": "2",
+      "name": "Validate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 300],
+      "notes": "Confirms the CRM sent every field this workflow needs before attempting to send anything. Never sends a message on incomplete data.",
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst required = ['idempotency_key', 'delivery_intent_key', 'channel', 'recipient', 'callback_url'];\nconst missing = required.filter((field) => !body[field]);\nconst channel = String(body.channel || '').toUpperCase();\nif (channel === 'EMAIL' && !body.qr_base64_png) {\n  missing.push('qr_base64_png');\n}\nreturn [{\n  json: {\n    valid: missing.length === 0,\n    missingFields: missing,\n    body: { ...body, channel },\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "3",
+      "name": "Payload Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [80, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{$json.valid}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "4",
+      "name": "Route By Channel",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [340, 180],
+      "parameters": {
+        "mode": "expression",
+        "output": "single",
+        "outputKey": "={{$json.body.channel}}",
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "notes": "Routes on the CRM-supplied 'channel' field: EMAIL, WHATSAPP, or anything else falls to the unsupported-channel failure branch."
+    },
+    {
+      "id": "5",
+      "name": "Prepare QR Attachment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 40],
+      "notes": "Converts the CRM-supplied base64 QR PNG into a binary attachment for the email node. No patient data is decoded or altered — the QR remains the same opaque image the CRM generated.",
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst buffer = Buffer.from(item.body.qr_base64_png, 'base64');\nreturn [{\n  json: item,\n  binary: {\n    qr: {\n      data: buffer.toString('base64'),\n      mimeType: 'image/png',\n      fileName: 'qr-code.png',\n    },\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "6",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [860, 40],
+      "onError": "continueErrorOutput",
+      "notes": "Uses a clinic-owned SMTP credential configured directly in n8n. No credentials are stored in this workflow file. Subject and body use only fields already present in the CRM payload.",
+      "parameters": {
+        "fromEmail": "={{$env.CLINIC_FROM_EMAIL}}",
+        "toEmail": "={{$json.body.recipient}}",
+        "subject": "Your Smriti Raj Dentistry QR Code",
+        "emailFormat": "text",
+        "text": "=Dear {{$json.body.patient_name}},\n\nThank you for registering with {{$json.body.hospital}}.\n\nService: {{$json.body.service}}\nCampaign: {{$json.body.campaign}}\nValid until: {{$json.body.expires_at}}\n\nYour QR code is attached to this email. Please present it at the clinic to redeem your offer. This QR is for one-time use only.\n\nRegards,\n{{$json.body.hospital}}",
+        "options": {
+          "attachments": "qr"
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Clinic SMTP"
+        }
+      }
+    },
+    {
+      "id": "7",
+      "name": "Build SENT Callback (Email)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1120, -40],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "idempotency_key", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.idempotency_key}}" },
+            { "id": "a2", "name": "status", "type": "string", "value": "SENT" },
+            { "id": "a3", "name": "provider_message_id", "type": "string", "value": "={{$json.messageId || $json.id || ''}}" },
+            { "id": "a4", "name": "failure_reason", "type": "string", "value": "=null" },
+            { "id": "a5", "name": "permanent", "type": "boolean", "value": false },
+            { "id": "a6", "name": "callback_url", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.callback_url}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "8",
+      "name": "Build FAILED Callback (Email Error)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1120, 140],
+      "notes": "Only the provider's error message is forwarded, never raw provider response bodies, headers, or credentials.",
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "idempotency_key", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.idempotency_key}}" },
+            { "id": "a2", "name": "status", "type": "string", "value": "FAILED" },
+            { "id": "a3", "name": "failure_reason", "type": "string", "value": "={{($json.error && $json.error.message) || 'Email send failed'}}" },
+            { "id": "a4", "name": "permanent", "type": "boolean", "value": false },
+            { "id": "a5", "name": "callback_url", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.callback_url}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "9",
+      "name": "WhatsApp Branch (Not Configured - Placeholder)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [600, 320],
+      "notes": "WhatsApp is intentionally not wired to a real provider yet. See n8n/README.md section E. To enable: add either a Meta WhatsApp Cloud API node/credential or a Twilio WhatsApp node/credential here, then route its success/error outputs the same way the Email branch does. Do not add API keys, access tokens, test phone numbers, or template IDs to this workflow file — configure them as n8n credentials only."
+    },
+    {
+      "id": "10",
+      "name": "Build FAILED Callback (WhatsApp Not Configured)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [860, 320],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "idempotency_key", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.idempotency_key}}" },
+            { "id": "a2", "name": "status", "type": "string", "value": "FAILED" },
+            { "id": "a3", "name": "failure_reason", "type": "string", "value": "WhatsApp delivery is not yet configured for this clinic. Configure a Meta WhatsApp Cloud API or Twilio WhatsApp credential in n8n to enable this channel." },
+            { "id": "a4", "name": "permanent", "type": "boolean", "value": false },
+            { "id": "a5", "name": "callback_url", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.callback_url}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "11",
+      "name": "Build FAILED Callback (Unsupported Channel)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [600, 480],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "idempotency_key", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.idempotency_key}}" },
+            { "id": "a2", "name": "status", "type": "string", "value": "FAILED" },
+            { "id": "a3", "name": "failure_reason", "type": "string", "value": "=Unsupported delivery channel: {{$node[\"CRM Delivery Webhook\"].json.body.channel}}" },
+            { "id": "a4", "name": "permanent", "type": "boolean", "value": true },
+            { "id": "a5", "name": "callback_url", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.callback_url}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "12",
+      "name": "Build FAILED Callback (Invalid Payload)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [340, 520],
+      "notes": "Missing-data failures are marked permanent — retrying the same incomplete payload will never succeed. If idempotency_key or callback_url itself is missing, the CRM cannot be notified at all; that case is only visible in this workflow's execution log.",
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "idempotency_key", "type": "string", "value": "={{$json.body.idempotency_key || ''}}" },
+            { "id": "a2", "name": "status", "type": "string", "value": "FAILED" },
+            { "id": "a3", "name": "failure_reason", "type": "string", "value": "=Missing required field(s): {{$json.missingFields.join(', ')}}" },
+            { "id": "a4", "name": "permanent", "type": "boolean", "value": true },
+            { "id": "a5", "name": "callback_url", "type": "string", "value": "={{$json.body.callback_url || ''}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "13",
+      "name": "Can Notify CRM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1380, 300],
+      "notes": "Guards against calling out to an empty callback_url (only possible if the CRM's own payload omitted it).",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{$json.callback_url}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "14",
+      "name": "Notify CRM (Callback)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1620, 260],
+      "notes": "Posts the result back to the CRM's existing /webhooks/n8n/delivery endpoint using the exact contract fields (idempotency_key, status, provider_message_id, failure_reason, permanent) and the shared X-N8N-Webhook-Secret header. Do not add a second auth mechanism here.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.callback_url}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { idempotency_key: $json.idempotency_key, status: $json.status, provider_message_id: $json.provider_message_id || null, failure_reason: $json.failure_reason || null, permanent: $json.permanent || false } }}",
+        "sendHeaders": false,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "CRM Delivery Shared Secret"
+        }
+      }
+    },
+    {
+      "id": "15",
+      "name": "Cannot Notify CRM (Missing callback_url)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1620, 420],
+      "notes": "Terminal safety branch. The CRM always sends callback_url, so reaching this node indicates a payload contract mismatch worth investigating in n8n's execution log."
+    }
+  ],
+  "connections": {
+    "CRM Delivery Webhook": {
+      "main": [
+        [{ "node": "Validate Payload", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [{ "node": "Payload Valid?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Payload Valid?": {
+      "main": [
+        [{ "node": "Route By Channel", "type": "main", "index": 0 }],
+        [{ "node": "Build FAILED Callback (Invalid Payload)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route By Channel": {
+      "main": [
+        [{ "node": "Prepare QR Attachment", "type": "main", "index": 0 }],
+        [{ "node": "WhatsApp Branch (Not Configured - Placeholder)", "type": "main", "index": 0 }],
+        [{ "node": "Build FAILED Callback (Unsupported Channel)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare QR Attachment": {
+      "main": [
+        [{ "node": "Send Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [{ "node": "Build SENT Callback (Email)", "type": "main", "index": 0 }],
+        [{ "node": "Build FAILED Callback (Email Error)", "type": "main", "index": 0 }]
+      ]
+    },
+    "WhatsApp Branch (Not Configured - Placeholder)": {
+      "main": [
+        [{ "node": "Build FAILED Callback (WhatsApp Not Configured)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build SENT Callback (Email)": {
+      "main": [
+        [{ "node": "Can Notify CRM?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build FAILED Callback (Email Error)": {
+      "main": [
+        [{ "node": "Can Notify CRM?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build FAILED Callback (WhatsApp Not Configured)": {
+      "main": [
+        [{ "node": "Can Notify CRM?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build FAILED Callback (Unsupported Channel)": {
+      "main": [
+        [{ "node": "Can Notify CRM?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build FAILED Callback (Invalid Payload)": {
+      "main": [
+        [{ "node": "Can Notify CRM?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Can Notify CRM?": {
+      "main": [
+        [{ "node": "Notify CRM (Callback)", "type": "main", "index": 0 }],
+        [{ "node": "Cannot Notify CRM (Missing callback_url)", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}

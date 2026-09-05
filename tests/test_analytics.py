@@ -29,7 +29,10 @@ def test_time_series_uses_grouped_registration_and_redemption_dates(client):
         first.redeemed_at = now
         db.commit()
 
-        series = daily_time_series(db, start=(now - timedelta(days=1)).date(), end=now.date())
+        # Wide margin so the Asia/Kolkata-vs-UTC day boundary can never exclude either
+        # timestamp; the day-bucket keys asserted below are still the literal UTC dates
+        # `daily_time_series` groups by, unaffected by the range filter's own margin.
+        series = daily_time_series(db, start=(now - timedelta(days=2)).date(), end=(now + timedelta(days=1)).date())
         registrations = {row["day"]: row["count"] for row in series["registrations"]}
         redemptions = {row["day"]: row["count"] for row in series["redemptions"]}
         assert registrations[str((now - timedelta(days=1)).date())] == 1
