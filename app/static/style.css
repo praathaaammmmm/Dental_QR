@@ -48,3 +48,18 @@
 .filters.patient-filters .filters-actions{margin-left:0}
 .filters.patient-filters .filters-actions .btn{flex:1;text-align:center}
 }
+/* Mobile layout fix (<=800px, covers the 375-767px phone range): the "frontend-main visual
+   integration" block above adds an unconditional `.app-main{margin-left:256px}` rule with the
+   same specificity as, and positioned after, the original mobile reset inside
+   `@media(max-width:800px)` near the top of this file. Because later same-specificity rules
+   win the cascade regardless of which media query declared the earlier one, that unconditional
+   rule was overriding the mobile reset on every phone, permanently reserving 256px for the
+   (visually hidden, off-canvas) sidebar and pushing all authenticated pages sideways: a blank
+   strip on the left, content cut off on the right. This block is deliberately the LAST rule in
+   the file so it always wins at these widths, without touching the >=1024px desktop layout.
+   Keep any future mobile-only overrides after this block, not before it. */
+@media(max-width:800px){
+html,body{overflow-x:hidden;max-width:100%}
+.app-main{margin-left:0;max-width:100%;width:100%;padding:22px 16px 40px}
+#reader video,#reader canvas{max-width:100%!important;height:auto!important}
+}
