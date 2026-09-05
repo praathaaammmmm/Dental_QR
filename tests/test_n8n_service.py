@@ -1,6 +1,6 @@
 import httpx
 
-from app import n8n_service
+from app.notifications import n8n as n8n_service
 
 
 def test_trigger_delivery_returns_pending_when_unconfigured(monkeypatch):

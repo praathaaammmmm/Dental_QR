@@ -8,14 +8,15 @@ from ..audit_service import audit
 from ..auth import require_staff
 from ..beneficiary_categories import SELECTABLE_CATEGORIES
 from ..query_params import optional_int
-from ..coupon_service import redeem_atomic, refresh_expiry
+from ..qr.service import find_coupon, redeem_atomic, refresh_expiry, result_for
 from ..models import AuditLog, Campaign, Offer, Patient, PatientOffer
 from ..config import VALIDATION_RATE_LIMIT_ATTEMPTS, VALIDATION_RATE_LIMIT_WINDOW_SECONDS
 from ..security import client_key, is_rate_limited, record_rate_limit_event, require_csrf
-from ..services.delivery_service import send_qr_delivery
-from ..services.registration_service import RegistrationError, register_patient_offer
+from ..registrations.service import (
+    RegistrationError, latest_coupon_for, register_patient_offer,
+    registration_form_options, resend_patient_delivery,
+)
 from ..time_utils import clinic_date_range_to_utc, utc_now
-from .validation import find_coupon, result_for
 
 router = APIRouter()
 
@@ -59,7 +60,7 @@ def register_page(request: Request):
     db = request.app.state.db()
     try:
         return request.app.state.templates.TemplateResponse(request, "register.html", _context(
-            request, offers=db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all(), campaigns=_active_campaigns(db), error=None,
+            request, **registration_form_options(db, campaigns=_active_campaigns(db)), error=None,
             form_action="/staff/register", back_url="/staff/home",
             beneficiary_categories=SELECTABLE_CATEGORIES, selected_category="",
         ))
@@ -93,7 +94,7 @@ def register_patient(
             db.rollback()
             error, status_code = "Registration could not be completed. Please try again.", 500
         return request.app.state.templates.TemplateResponse(request, "register.html", _context(
-            request, offers=db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all(), campaigns=_active_campaigns(db), error=error,
+            request, **registration_form_options(db, campaigns=_active_campaigns(db)), error=error,
             form_action="/staff/register", back_url="/staff/home",
             beneficiary_categories=SELECTABLE_CATEGORIES, selected_category=beneficiary_category,
         ), status_code=status_code)
@@ -152,7 +153,7 @@ def patient_detail(request: Request, patient_id: int):
         patient = db.get(Patient, patient_id)
         if not patient:
             return RedirectResponse("/staff/patients", status_code=303)
-        coupon = max(patient.offers, key=lambda item: item.created_at) if patient.offers else None
+        coupon = latest_coupon_for(patient)
         events = db.query(AuditLog).filter(AuditLog.patient_id == patient.id).order_by(AuditLog.timestamp.desc()).all()
         return request.app.state.templates.TemplateResponse(request, "patient_detail.html", _context(
             request, patient=patient, coupon=coupon, events=events, back_url="/staff/patients",
@@ -170,15 +171,12 @@ def resend_delivery(request: Request, patient_id: int, channel: str, _csrf: None
     channel = channel.upper()
     db = request.app.state.db()
     try:
-        patient = db.get(Patient, patient_id)
-        coupon = max(patient.offers, key=lambda item: item.created_at) if patient and patient.offers else None
-        if channel not in {"EMAIL", "WHATSAPP"} or not coupon:
+        if channel not in {"EMAIL", "WHATSAPP"}:
             return RedirectResponse(f"/staff/patients/{patient_id}?message=Delivery is unavailable", status_code=303)
-        try:
-            result = send_qr_delivery(db, patient, coupon, channel, request.session["user"])
-        except ValueError as exc:
-            return RedirectResponse(f"/staff/patients/{patient_id}?message={exc}", status_code=303)
-        return RedirectResponse(f"/staff/patients/{patient_id}?message={channel.title()} delivery {result['status'].lower()}", status_code=303)
+        _ok, message = resend_patient_delivery(db, patient_id, channel, request.session["user"])
+        if not _ok and message == "No active registration":
+            message = "Delivery is unavailable"
+        return RedirectResponse(f"/staff/patients/{patient_id}?message={message}", status_code=303)
     finally:
         db.close()
 
@@ -254,7 +252,7 @@ def redeem(request: Request, patient_id: int, _csrf: None = Depends(require_csrf
     db = request.app.state.db()
     try:
         patient = db.get(Patient, patient_id)
-        coupon = max(patient.offers, key=lambda item: item.created_at) if patient and patient.offers else None
+        coupon = latest_coupon_for(patient) if patient else None
         if not coupon:
             return RedirectResponse("/staff/validate", status_code=303)
         if redeem_atomic(db, coupon.id, request.session["user"], utc_now()):

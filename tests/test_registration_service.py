@@ -2,7 +2,7 @@ import pytest
 
 from app.database import SessionLocal
 from app.models import AuditLog, PatientOffer
-from app.services.registration_service import DuplicateRegistrationError, register_patient_offer
+from app.registrations.service import DuplicateRegistrationError, register_patient_offer
 
 
 def _register(db, mobile="9999999977"):

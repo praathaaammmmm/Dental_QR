@@ -5,12 +5,14 @@ from sqlalchemy import or_
 from ..auth import require_admin
 from ..audit_service import audit
 from ..beneficiary_categories import SELECTABLE_CATEGORIES
-from ..models import Patient, PatientOffer, Offer, Campaign, AuditLog
+from ..models import Patient, PatientOffer, Offer, AuditLog
 from ..query_params import optional_int
 from ..security import require_csrf
 from ..time_utils import utc_now
-from ..services.registration_service import RegistrationError, register_patient_offer
-from ..services.delivery_service import send_qr_delivery
+from ..registrations.service import (
+    RegistrationError, latest_coupon_for, register_patient_offer,
+    registration_form_options, resend_patient_delivery,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,10 +46,8 @@ def register_page(request: Request):
     if guard: return guard
     db = request.app.state.db()
     try:
-        offers = db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all()
-        campaigns = db.query(Campaign).filter(Campaign.status == "ACTIVE").order_by(Campaign.start_date.desc()).all()
         return request.app.state.templates.TemplateResponse(request, "register.html", {
-            "request": request, "offers": offers, "campaigns": campaigns, "error": None,
+            "request": request, "error": None, **registration_form_options(db),
             "beneficiary_categories": SELECTABLE_CATEGORIES, "selected_category": "",
         })
     finally:
@@ -82,19 +82,15 @@ def register_patient(
         )
         return RedirectResponse(f"/patients/{coupon.patient_id}", status_code=303)
     except RegistrationError as exc:
-        offers = db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all()
-        campaigns = db.query(Campaign).filter(Campaign.status == "ACTIVE").order_by(Campaign.start_date.desc()).all()
         return request.app.state.templates.TemplateResponse(request, "register.html", {
-            "request": request, "offers": offers, "campaigns": campaigns, "error": str(exc),
+            "request": request, "error": str(exc), **registration_form_options(db),
             "beneficiary_categories": SELECTABLE_CATEGORIES, "selected_category": beneficiary_category,
         }, status_code=422)
     except Exception:
         logger.exception("Patient registration failed")
         db.rollback()
-        offers = db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all()
-        campaigns = db.query(Campaign).filter(Campaign.status == "ACTIVE").order_by(Campaign.start_date.desc()).all()
         return request.app.state.templates.TemplateResponse(request, "register.html", {
-            "request": request, "offers": offers, "campaigns": campaigns, "error": "Registration could not be completed. Please try again.",
+            "request": request, "error": "Registration could not be completed. Please try again.", **registration_form_options(db),
             "beneficiary_categories": SELECTABLE_CATEGORIES, "selected_category": beneficiary_category,
         }, status_code=500)
     finally:
@@ -108,7 +104,7 @@ def patient_detail(request: Request, patient_id: int):
         patient = db.get(Patient, patient_id)
         if not patient:
             return RedirectResponse("/patients", status_code=303)
-        coupon = max(patient.offers, key=lambda item: item.created_at) if patient.offers else None
+        coupon = latest_coupon_for(patient)
         events = db.query(AuditLog).filter(AuditLog.patient_id == patient.id).order_by(AuditLog.timestamp.desc()).all()
         return request.app.state.templates.TemplateResponse(request, "patient_detail.html", {"request": request, "patient": patient, "coupon": coupon, "events": events})
     finally:
@@ -126,9 +122,9 @@ def cancel_coupon(
     db = request.app.state.db()
     try:
         patient = db.get(Patient, patient_id)
-        if not patient or not patient.offers:
+        coupon = latest_coupon_for(patient) if patient else None
+        if not coupon:
             return RedirectResponse("/patients", status_code=303)
-        coupon = max(patient.offers, key=lambda item: item.created_at)
         if coupon.status != "ACTIVE":
             return RedirectResponse(f"/patients/{patient_id}?message=Only active offers can be cancelled", status_code=303)
         now = utc_now()
@@ -148,15 +144,8 @@ def send_email(request: Request, patient_id: int, _csrf: None = Depends(require_
     if guard: return guard
     db = request.app.state.db()
     try:
-        patient = db.get(Patient, patient_id)
-        coupon = max(patient.offers, key=lambda item: item.created_at) if patient and patient.offers else None
-        if not coupon:
-            return RedirectResponse(f"/patients/{patient_id}?message=No active registration", status_code=303)
-        try:
-            result = send_qr_delivery(db, patient, coupon, "EMAIL", request.session.get("user", "admin"))
-        except ValueError as exc:
-            return RedirectResponse(f"/patients/{patient_id}?message={exc}", status_code=303)
-        return RedirectResponse(f"/patients/{patient_id}?message=Email delivery {result['status'].lower()}", status_code=303)
+        _ok, message = resend_patient_delivery(db, patient_id, "EMAIL", request.session.get("user", "admin"))
+        return RedirectResponse(f"/patients/{patient_id}?message={message}", status_code=303)
     finally:
         db.close()
 
@@ -166,14 +155,7 @@ def whatsapp(request: Request, patient_id: int, _csrf: None = Depends(require_cs
     if guard: return guard
     db = request.app.state.db()
     try:
-        patient = db.get(Patient, patient_id)
-        coupon = max(patient.offers, key=lambda item: item.created_at) if patient and patient.offers else None
-        if not coupon:
-            return RedirectResponse(f"/patients/{patient_id}?message=No active registration", status_code=303)
-        try:
-            result = send_qr_delivery(db, patient, coupon, "WHATSAPP", request.session.get("user", "admin"))
-        except ValueError as exc:
-            return RedirectResponse(f"/patients/{patient_id}?message={exc}", status_code=303)
-        return RedirectResponse(f"/patients/{patient_id}?message=WhatsApp delivery {result['status'].lower()}", status_code=303)
+        _ok, message = resend_patient_delivery(db, patient_id, "WHATSAPP", request.session.get("user", "admin"))
+        return RedirectResponse(f"/patients/{patient_id}?message={message}", status_code=303)
     finally:
         db.close()

@@ -1,6 +1,6 @@
 from app.database import SessionLocal
 from app.models import AuditLog, DeliveryLog
-from app.services.registration_service import register_patient_offer
+from app.registrations.service import register_patient_offer
 from app.time_utils import utc_now
 
 SECRET = "test-n8n-webhook-secret"
@@ -221,8 +221,8 @@ def test_legacy_fallback_disabled_by_default_returns_404_for_null_key_row(client
 
 
 def test_legacy_fallback_works_when_flag_enabled_for_null_key_row(client, monkeypatch):
-    from app.routes import operations
-    monkeypatch.setattr(operations, "N8N_WEBHOOK_LEGACY_CALLBACK_COMPAT", True)
+    from app.notifications import routes as notifications_routes
+    monkeypatch.setattr(notifications_routes, "N8N_WEBHOOK_LEGACY_CALLBACK_COMPAT", True)
 
     db = SessionLocal()
     try:
@@ -248,8 +248,8 @@ def test_legacy_fallback_works_when_flag_enabled_for_null_key_row(client, monkey
 
 
 def test_legacy_fallback_never_matches_a_modern_keyed_row_even_when_flag_enabled(client, monkeypatch):
-    from app.routes import operations
-    monkeypatch.setattr(operations, "N8N_WEBHOOK_LEGACY_CALLBACK_COMPAT", True)
+    from app.notifications import routes as notifications_routes
+    monkeypatch.setattr(notifications_routes, "N8N_WEBHOOK_LEGACY_CALLBACK_COMPAT", True)
 
     db = SessionLocal()
     try:

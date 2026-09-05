@@ -1,7 +1,7 @@
 from datetime import timedelta
 from app.database import SessionLocal
 from app.models import PatientOffer
-from app.qr_service import token_for, token_hash
+from app.qr.service import token_for, token_hash
 
 def registration(name, mobile, offer="1", consent="true", beneficiary_category="CGHS"):
     return {"full_name": name, "mobile": mobile, "campaign_id": "1", "offer_id": offer, "consent_given": consent, "beneficiary_category": beneficiary_category}

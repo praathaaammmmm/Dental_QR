@@ -1,35 +1,14 @@
-import re
 from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from ..auth import require_admin
 from ..models import PatientOffer
-from ..coupon_service import refresh_expiry, redeem_atomic
+from ..qr.service import find_coupon, refresh_expiry, redeem_atomic, result_for
 from ..audit_service import audit
 from ..security import require_csrf
 from ..time_utils import utc_now
-from ..qr_service import token_for, token_hash
 
 router = APIRouter()
-
-def find_coupon(db, token):
-    value = token.strip()
-    if re.fullmatch(r"SRD-[A-F0-9]{8}", value, re.IGNORECASE):
-        coupon = db.execute(
-            select(PatientOffer).where(PatientOffer.coupon_uid == value.upper())
-        ).scalar_one_or_none()
-        if coupon and coupon.secure_token_hash == token_hash(token_for(coupon.coupon_uid)):
-            return coupon
-        return None
-    return db.execute(
-        select(PatientOffer).where(PatientOffer.secure_token_hash == token_hash(value))
-    ).scalar_one_or_none()
-
-def result_for(coupon):
-    if coupon.status == "REDEEMED": return {"kind": "REDEEMED", "coupon": coupon}
-    if coupon.status == "CANCELLED": return {"kind": "CANCELLED", "coupon": coupon}
-    if coupon.status == "EXPIRED": return {"kind": "EXPIRED", "coupon": coupon}
-    return {"kind": "VALID", "coupon": coupon}
 
 @router.get("/validate")
 def validate_page(request: Request):

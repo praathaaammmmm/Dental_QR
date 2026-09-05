@@ -2,15 +2,15 @@ from datetime import timedelta
 
 from sqlalchemy.exc import IntegrityError
 
-from app import n8n_service
+from app.notifications import n8n as n8n_service
 from app.database import SessionLocal
 from app.models import DeliveryLog
-from app.services import delivery_service
-from app.services.delivery_service import (
+from app.notifications import service as delivery_service
+from app.notifications.service import (
     _claim_prepared_rows, _finish_sending_attempt, _recover_stale_sending,
     dispatch_pending_deliveries, maybe_retry_failed_intents,
 )
-from app.services.registration_service import register_patient_offer
+from app.registrations.service import register_patient_offer
 from app.time_utils import utc_now
 
 

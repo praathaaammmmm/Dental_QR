@@ -2,7 +2,7 @@ from datetime import timedelta
 from app.database import Base, engine, SessionLocal
 from app.time_utils import utc_now
 from app.models import Patient, Offer, PatientOffer
-from app.qr_service import new_uid, expiry_for, generate_qr, token_for, token_hash
+from app.qr.service import new_uid, expiry_for, generate_qr, token_for, token_hash
 
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()

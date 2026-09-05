@@ -3,7 +3,7 @@ from datetime import timedelta
 from app.database import SessionLocal
 from app.expiry_service import REMINDER_ACTION, run_expiry_sweep
 from app.models import AuditLog, PatientOffer
-from app.qr_service import token_for
+from app.qr.service import token_for
 from app.time_utils import utc_now
 
 

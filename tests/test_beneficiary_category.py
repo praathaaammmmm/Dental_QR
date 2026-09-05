@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from app.database import SessionLocal, engine
 from app.models import PatientOffer
-from app.services.analytics_service import registrations_by_category
+from app.reporting.service import registrations_by_category
 from app.time_utils import utc_now
 from tests.test_staff_interface import _login_as_staff
 

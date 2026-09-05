@@ -1,6 +1,6 @@
 """Outbound delivery boundary. n8n owns email/WhatsApp provider integration."""
 import httpx
-from .config import N8N_WEBHOOK_SECRET, N8N_WEBHOOK_URL
+from ..config import N8N_WEBHOOK_SECRET, N8N_WEBHOOK_URL
 
 def trigger_delivery(payload: dict) -> dict:
     if not N8N_WEBHOOK_URL:

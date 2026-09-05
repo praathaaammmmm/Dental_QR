@@ -110,6 +110,17 @@ def campaign_performance(db: Session, campaign_id=None, offer_id=None, start: da
     return [dict(row) for row in rows]
 
 
+def counts(db: Session, campaign_id=None, offer_id=None, start: date | None = None, end: date | None = None) -> tuple[int, int, int]:
+    """Thin (issued, redeemed, expired) convenience wrapper over ``dashboard_summary``,
+    reused by the campaigns UI (campaign/service performance stats) as well as the
+    dashboard itself — a read-only reporting query, not a reporting-domain mutation, so
+    campaigns depending on it does not create a write-direction coupling back into
+    reporting.
+    """
+    summary = dashboard_summary(db, campaign_id, offer_id, start, end)
+    return summary["issued"], summary["redeemed"], summary["expired"]
+
+
 def patient_export_rows(db: Session, campaign_id=None, offer_id=None, start: date | None = None, end: date | None = None):
     conditions = _offer_conditions(campaign_id, offer_id, start, end, PatientOffer.created_at)
     return db.execute(select(
