@@ -30,7 +30,7 @@ def upgrade() -> None:
         sa.Column("campaign_id", sa.Integer(), sa.ForeignKey("campaigns.id"), primary_key=True),
         sa.Column("offer_id", sa.Integer(), sa.ForeignKey("offers.id"), primary_key=True),
     )
-    with op.batch_alter_table("patient_offers", recreate="always") as batch_op:
+    with op.batch_alter_table("patient_offers") as batch_op:
         batch_op.add_column(sa.Column("campaign_id", sa.Integer(), nullable=True))
         batch_op.create_foreign_key(
             "fk_patient_offers_campaign_id",
@@ -39,7 +39,7 @@ def upgrade() -> None:
             ["id"],
         )
         batch_op.create_index("ix_patient_offers_campaign_id", ["campaign_id"], unique=False)
-    with op.batch_alter_table("delivery_logs", recreate="always") as batch_op:
+    with op.batch_alter_table("delivery_logs") as batch_op:
         batch_op.add_column(sa.Column("recipient", sa.String(255), nullable=True))
         batch_op.add_column(sa.Column("n8n_workflow_id", sa.String(150), nullable=True))
         batch_op.add_column(sa.Column("provider_message_id", sa.String(150), nullable=True))
@@ -47,12 +47,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("delivery_logs", recreate="always") as batch_op:
+    with op.batch_alter_table("delivery_logs") as batch_op:
         batch_op.drop_column("failure_reason")
         batch_op.drop_column("provider_message_id")
         batch_op.drop_column("n8n_workflow_id")
         batch_op.drop_column("recipient")
-    with op.batch_alter_table("patient_offers", recreate="always") as batch_op:
+    with op.batch_alter_table("patient_offers") as batch_op:
         batch_op.drop_index("ix_patient_offers_campaign_id")
         batch_op.drop_constraint("fk_patient_offers_campaign_id", type_="foreignkey")
         batch_op.drop_column("campaign_id")

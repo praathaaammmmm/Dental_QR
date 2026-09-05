@@ -15,10 +15,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("offers", recreate="always") as batch_op:
+    with op.batch_alter_table("offers") as batch_op:
         batch_op.add_column(sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.true()))
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("offers", recreate="always") as batch_op:
+    with op.batch_alter_table("offers") as batch_op:
         batch_op.drop_column("active")
