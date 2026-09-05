@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from ..audit_service import audit
 from ..models import Campaign, Offer, Patient, PatientOffer
-from ..qr_service import expiry_for, generate_qr, new_uid, token_for, token_hash
-from .delivery_service import queue_registration_deliveries
+from ..qr.service import expiry_for, generate_qr, new_uid, token_for, token_hash
+from ..notifications.service import queue_registration_deliveries, send_qr_delivery
 from ..schemas import PatientCreate
 from ..time_utils import utc_now
 
@@ -146,3 +146,50 @@ def register_patient_offer(
     except Exception:
         db.rollback()
         raise
+
+
+def latest_coupon_for(patient: Patient) -> PatientOffer | None:
+    """A patient currently has at most one meaningful registration in practice, but the
+    relationship is one-to-many (manual resend can add rows) — this is the single
+    shared rule for "which one is *the* registration to show/act on", used identically
+    by both the admin and staff patient-detail/cancel/delivery/redeem routes so it can
+    never drift between the two.
+    """
+    return max(patient.offers, key=lambda item: item.created_at) if patient.offers else None
+
+
+def registration_form_options(db: Session, campaigns: list[Campaign] | None = None) -> dict:
+    """Shared offer/campaign choices for the registration form, used identically by the
+    admin and staff register pages (both the initial GET and a failed-submission
+    re-render).
+
+    ``campaigns`` lets a caller substitute its own campaign list — the staff register
+    page deliberately shows only campaigns ACTIVE *and* within their date range (see
+    ``routes/staff.py``'s ``_active_campaigns``), while the admin register page shows
+    every ACTIVE campaign regardless of date. That is a real, pre-existing difference in
+    what each role is allowed to register against, not incidental duplication, so it is
+    preserved rather than unified.
+    """
+    return {
+        "offers": db.query(Offer).filter(Offer.active == True).order_by(Offer.id).all(),
+        "campaigns": campaigns if campaigns is not None else (
+            db.query(Campaign).filter(Campaign.status == "ACTIVE").order_by(Campaign.start_date.desc()).all()
+        ),
+    }
+
+
+def resend_patient_delivery(db: Session, patient_id: int, channel: str, actor: str) -> tuple[bool, str]:
+    """Shared "resend this patient's QR over one channel" flow used by both the admin
+    (two single-channel routes) and staff (one channel-parameterized route) delivery
+    endpoints. Returns (ok, message) — message is safe to show the user either way.
+    """
+    patient = db.get(Patient, patient_id)
+    coupon = latest_coupon_for(patient) if patient else None
+    if not coupon:
+        return False, "No active registration"
+    try:
+        result = send_qr_delivery(db, patient, coupon, channel, actor)
+    except ValueError as exc:
+        return False, str(exc)
+    channel_label = {"EMAIL": "Email", "WHATSAPP": "WhatsApp"}.get(channel, channel.title())
+    return True, f"{channel_label} delivery {result['status'].lower()}"

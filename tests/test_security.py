@@ -85,7 +85,7 @@ def test_registration_rejects_invalid_contact_data(client):
 
 
 def test_registration_does_not_expose_internal_error(client, monkeypatch):
-    from app.services import registration_service
+    from app.registrations import service as registration_service
 
     def fail_generation(*_args, **_kwargs):
         raise RuntimeError("SECRET INTERNAL FAILURE")

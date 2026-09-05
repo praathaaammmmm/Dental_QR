@@ -7,7 +7,7 @@ directly — this job is the only place outbound delivery HTTP calls happen.
 import logging
 
 from .database import SessionLocal
-from .services.delivery_service import dispatch_pending_deliveries, maybe_retry_failed_intents
+from .notifications.service import dispatch_pending_deliveries, maybe_retry_failed_intents
 
 
 def main() -> None:

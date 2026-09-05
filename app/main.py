@@ -59,14 +59,28 @@ templates.env.filters["category_label"] = lambda value: CATEGORY_LABELS.get(valu
 app.state.templates = templates
 app.state.db = SessionLocal
 
-from .routes import auth, patients, coupons, validation, operations, admin, staff
+from .routes import auth, patients, validation, staff
+from .audit import routes as audit_routes
+from .campaigns import routes as campaigns_routes
+from .notifications import routes as notifications_routes
+from .offers import routes as offers_routes
+from .qr import routes as qr_routes
+from .registrations import routes as registrations_routes
+from .reporting import routes as reporting_routes
+from .staff_accounts import routes as staff_accounts_routes
+
 app.include_router(auth.router)
 app.include_router(patients.router)
-app.include_router(coupons.router)
 app.include_router(validation.router)
-app.include_router(operations.router)
-app.include_router(admin.router)
 app.include_router(staff.router)
+app.include_router(audit_routes.router)
+app.include_router(campaigns_routes.router)
+app.include_router(notifications_routes.router)
+app.include_router(offers_routes.router)
+app.include_router(qr_routes.router)
+app.include_router(registrations_routes.router)
+app.include_router(reporting_routes.router)
+app.include_router(staff_accounts_routes.router)
 
 @app.get("/", include_in_schema=False)
 def root(request: Request):

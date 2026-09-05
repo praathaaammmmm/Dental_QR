@@ -20,7 +20,7 @@ from ..config import (
     N8N_DELIVERY_MAX_RETRIES, N8N_WEBHOOK_URL, QR_DIR,
 )
 from ..models import DeliveryLog, Patient, PatientOffer
-from ..n8n_service import trigger_delivery
+from .n8n import trigger_delivery
 from ..time_utils import utc_now
 
 CALLBACK_PATH = "/webhooks/n8n/delivery"

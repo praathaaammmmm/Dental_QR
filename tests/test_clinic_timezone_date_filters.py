@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 from app.database import SessionLocal
 from app.models import Campaign, Offer, PatientOffer
-from app.services.analytics_service import dashboard_summary
+from app.reporting.service import dashboard_summary
 from app.time_utils import clinic_local_day_start_utc
 from tests.test_staff_interface import _login_as_staff
 

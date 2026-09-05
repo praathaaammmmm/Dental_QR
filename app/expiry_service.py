@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 from .audit_service import audit
 from .config import N8N_CALLBACK_BASE_URL
 from .models import AuditLog, PatientOffer
-from .n8n_service import trigger_delivery
-from .services.delivery_service import CALLBACK_PATH, new_key
+from .notifications.n8n import trigger_delivery
+from .notifications.service import CALLBACK_PATH, new_key
 from .time_utils import utc_now
 
 SYSTEM_ACTOR = "system:expiry-sweep"

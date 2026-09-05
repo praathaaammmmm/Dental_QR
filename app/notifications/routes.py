@@ -22,17 +22,6 @@ LEGAL_TRANSITIONS = {
     ("SENT", "FAILED"),
 }
 
-@router.get("/redemptions")
-def redemptions(request: Request):
-    guard = require_admin(request)
-    if guard:
-        return guard
-    db = request.app.state.db()
-    try:
-        rows = db.query(PatientOffer).filter(PatientOffer.status == "REDEEMED").order_by(PatientOffer.redeemed_at.desc()).all()
-        return request.app.state.templates.TemplateResponse(request, "redemptions.html", {"request": request, "rows": rows})
-    finally:
-        db.close()
 
 @router.get("/delivery")
 def delivery(request: Request):
@@ -45,6 +34,7 @@ def delivery(request: Request):
         return request.app.state.templates.TemplateResponse(request, "delivery.html", {"request": request, "rows": rows})
     finally:
         db.close()
+
 
 @router.post("/webhooks/n8n/delivery")
 def n8n_delivery_webhook(request: Request, payload: dict, x_n8n_webhook_secret: str = Header(default="")):

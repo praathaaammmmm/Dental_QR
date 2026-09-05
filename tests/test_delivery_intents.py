@@ -2,8 +2,8 @@ import httpx
 
 from app.database import SessionLocal
 from app.models import DeliveryLog, Patient
-from app.services.delivery_service import queue_manual_resend, queue_registration_deliveries
-from app.services.registration_service import register_patient_offer
+from app.notifications.service import queue_manual_resend, queue_registration_deliveries
+from app.registrations.service import register_patient_offer
 
 
 def _register(db, mobile, email=""):

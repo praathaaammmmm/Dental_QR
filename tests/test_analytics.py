@@ -4,7 +4,7 @@ from app.audit_service import audit
 from app.auth import password_hasher
 from app.database import SessionLocal
 from app.models import PatientOffer, StaffUser
-from app.services.analytics_service import daily_time_series, staff_performance
+from app.reporting.service import daily_time_series, staff_performance
 from app.time_utils import utc_now
 
 
