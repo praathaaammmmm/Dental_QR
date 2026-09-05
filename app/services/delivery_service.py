@@ -16,8 +16,8 @@ from sqlalchemy.orm import Session
 
 from ..audit_service import audit
 from ..config import (
-    DELIVERY_STALE_SENDING_SECONDS, HOSPITAL_NAME, N8N_DELIVERY_MAX_RETRIES,
-    N8N_WEBHOOK_URL, PUBLIC_BASE_URL, QR_DIR,
+    DELIVERY_STALE_SENDING_SECONDS, HOSPITAL_NAME, N8N_CALLBACK_BASE_URL,
+    N8N_DELIVERY_MAX_RETRIES, N8N_WEBHOOK_URL, QR_DIR,
 )
 from ..models import DeliveryLog, Patient, PatientOffer
 from ..n8n_service import trigger_delivery
@@ -115,7 +115,7 @@ def _payload_for(db: Session, row: DeliveryLog) -> dict:
         "campaign": coupon.campaign.name if coupon.campaign else patient.campaign_name,
         "expires_at": coupon.expires_at.isoformat(),
         "qr_base64_png": qr_b64,
-        "callback_url": f"{PUBLIC_BASE_URL}{CALLBACK_PATH}",
+        "callback_url": f"{N8N_CALLBACK_BASE_URL}{CALLBACK_PATH}",
     }
 
 

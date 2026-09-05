@@ -72,17 +72,57 @@
       "id": "4",
       "name": "Route By Channel",
       "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
+      "typeVersion": 3.2,
       "position": [340, 180],
       "parameters": {
-        "mode": "expression",
-        "output": "single",
-        "outputKey": "={{$json.body.channel}}",
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{$json.body.channel}}",
+                    "rightValue": "EMAIL",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "outputKey": "email"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{$json.body.channel}}",
+                    "rightValue": "WHATSAPP",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "outputKey": "whatsapp"
+            }
+          ]
+        },
         "options": {
           "fallbackOutput": "extra"
         }
       },
-      "notes": "Routes on the CRM-supplied 'channel' field: EMAIL, WHATSAPP, or anything else falls to the unsupported-channel failure branch."
+      "notes": "Routes on the CRM-supplied 'channel' field: EMAIL, WHATSAPP, or anything else falls to the unsupported-channel failure branch (the 'extra' fallback output, produced automatically by rules-mode fallbackOutput). Output order is rules.values order then the fallback: index 0 = EMAIL, index 1 = WHATSAPP, index 2 = fallback/unsupported. Rebuilt for n8n's current rules-mode Switch schema — the previous 'expression'+'outputKey' combination is from the pre-rules Switch parameter shape and made the node try to push into an output array that does not exist, throwing \"Cannot read properties of undefined (reading 'push')\" on every execution."
     },
     {
       "id": "5",
@@ -172,13 +212,14 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [860, 320],
+      "notes": "permanent: true (non-retryable) — a missing WhatsApp provider credential cannot self-heal by retrying the same message later; it only changes once a clinic admin configures a real provider in n8n. Retrying it would just burn through the delivery's limited retry budget for no chance of success.",
       "parameters": {
         "assignments": {
           "assignments": [
             { "id": "a1", "name": "idempotency_key", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.idempotency_key}}" },
             { "id": "a2", "name": "status", "type": "string", "value": "FAILED" },
             { "id": "a3", "name": "failure_reason", "type": "string", "value": "WhatsApp delivery is not yet configured for this clinic. Configure a Meta WhatsApp Cloud API or Twilio WhatsApp credential in n8n to enable this channel." },
-            { "id": "a4", "name": "permanent", "type": "boolean", "value": false },
+            { "id": "a4", "name": "permanent", "type": "boolean", "value": true },
             { "id": "a5", "name": "callback_url", "type": "string", "value": "={{$node[\"CRM Delivery Webhook\"].json.body.callback_url}}" }
           ]
         }

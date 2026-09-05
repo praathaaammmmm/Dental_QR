@@ -22,6 +22,11 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv(
     "ALLOWED_HOSTS", "127.0.0.1,localhost,testserver,healthcheck.railway.app"
 ).split(",") if host.strip()]
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+# Base URL n8n uses to reach the CRM's callback endpoint. Distinct from PUBLIC_BASE_URL
+# because n8n may run in a different network context than the CRM's own public address
+# (e.g. inside Docker, where "localhost" resolves to the n8n container itself, not the
+# host running the CRM) — defaults to PUBLIC_BASE_URL when not set separately.
+N8N_CALLBACK_BASE_URL = os.getenv("N8N_CALLBACK_BASE_URL", PUBLIC_BASE_URL).rstrip("/")
 HOSPITAL_NAME = os.getenv("HOSPITAL_NAME", "Smriti Raj Dentistry")
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "")
 N8N_WEBHOOK_SECRET = os.getenv("N8N_WEBHOOK_SECRET", "")
@@ -64,6 +69,8 @@ def validate_security_config() -> None:
         errors.append("DATABASE_URL must use PostgreSQL in production")
     if APP_ENV == "production" and not PUBLIC_BASE_URL.startswith("https://"):
         errors.append("PUBLIC_BASE_URL must use HTTPS in production")
+    if APP_ENV == "production" and not N8N_CALLBACK_BASE_URL.startswith("https://"):
+        errors.append("N8N_CALLBACK_BASE_URL must use HTTPS in production")
     if APP_ENV == "production" and (not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS):
         errors.append("ALLOWED_HOSTS must explicitly list production hosts")
     if DB_POOL_SIZE < 1 or DB_MAX_OVERFLOW < 0 or DB_POOL_TIMEOUT_SECONDS < 1:

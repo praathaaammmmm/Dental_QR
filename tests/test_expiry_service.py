@@ -43,6 +43,30 @@ def test_expiry_sweep_expires_stale_records_and_triggers_one_reminder(client, mo
         db.close()
 
 
+def test_expiry_reminder_callback_url_uses_n8n_callback_base_url(client, monkeypatch):
+    """Expiry reminders share the same callback-reachability concern as delivery
+    dispatch: n8n must be able to reach the CRM, which is not always the same address
+    the CRM considers its own public URL (e.g. n8n running in Docker)."""
+    monkeypatch.setattr("app.expiry_service.N8N_CALLBACK_BASE_URL", "http://host.docker.internal:8000")
+    _register(client, "Reminder Callback URL", "9000000004")
+    now = utc_now()
+    db = SessionLocal()
+    try:
+        coupon = db.query(PatientOffer).one()
+        coupon.expires_at = now + timedelta(hours=30)
+        db.commit()
+
+        calls = []
+        monkeypatch.setattr(
+            "app.expiry_service.trigger_delivery",
+            lambda payload: calls.append(payload) or {"status": "PENDING", "reason": "test"},
+        )
+        run_expiry_sweep(db, now)
+        assert calls[0]["callback_url"] == "http://host.docker.internal:8000/webhooks/n8n/delivery"
+    finally:
+        db.close()
+
+
 def test_validation_rejects_expired_registration_before_a_sweep_runs(client):
     _register(client, "Lazy Expiry", "9000000003")
     db = SessionLocal()

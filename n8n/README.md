@@ -60,6 +60,40 @@ The imported workflow's **Send Email** node needs one SMTP-style credential in n
    (used by the Send Email node's "from" address); if you skip this, set the From Email
    directly on the node instead.
 
+## B.1 Re-importing after the "Route By Channel" fix
+
+An earlier version of `n8n/crm-qr-delivery.json` configured the **Route By Channel**
+Switch node with a parameter shape (`mode: "expression"` plus an `outputKey` string) that
+belongs to an older Switch node generation. On current n8n versions this makes the node
+try to push each item into an output array that doesn't exist, and every execution fails
+at that node with:
+
+```
+Cannot read properties of undefined (reading 'push')
+```
+
+The node has been rebuilt to use the current Switch node's **rules** mode (three routing
+rules: `EMAIL`, `WHATSAPP`, and a fallback output for anything else). If you already
+imported the old version of this workflow:
+
+1. **Do not** try to fix the node by hand in the n8n editor — re-import the file instead,
+   since the node's whole parameter shape changed, not just one field.
+2. In n8n, open the existing **CRM QR Delivery** workflow and **deactivate** it (top-right
+   toggle).
+3. Re-import `n8n/crm-qr-delivery.json` the same way as section B (**Workflows → Import
+   from File**). n8n will ask whether to create a new workflow or overwrite the existing
+   one by ID — updating the existing workflow in place is fine and preserves its
+   Executions history; you do not need to delete it first.
+4. Re-open the **CRM Delivery Webhook**, **Send Email**, and **Notify CRM (Callback)**
+   nodes and reattach the **CRM Delivery Shared Secret** and email credentials — importing
+   a workflow file never carries real credential values with it (see the Security notes at
+   the bottom of this file), only the credential *name* reference, so n8n may show these
+   nodes as needing their credential re-selected from the list.
+5. **Activate** the workflow again.
+6. Retest with a fresh registration (section H) — the previous failure happened before
+   **Send Email**, so no patient was ever emailed by the broken version; nothing needs to
+   be undone on the email side.
+
 ## E. WhatsApp setup
 
 WhatsApp is **not active** in the imported workflow. The "WhatsApp Branch" is a clearly
@@ -110,15 +144,58 @@ a new or different command.)
 
 ## G. Local versus cloud connectivity
 
-- If n8n is running **on the same computer** as the CRM (a local n8n install), it can
-  reach the CRM at `127.0.0.1` or `localhost` without any extra setup.
+**"localhost"/"127.0.0.1" mean different machines depending on which side evaluates
+them.** Two separate URLs are involved and they are not interchangeable:
+- **CRM → n8n** (`N8N_WEBHOOK_URL` in the CRM's `.env`): the address the CRM's dispatcher
+  uses to POST a delivery job to n8n's webhook.
+- **n8n → CRM** (`N8N_CALLBACK_BASE_URL` in the CRM's `.env`, used to build the
+  `callback_url` field the CRM sends n8n): the address n8n itself must use to POST the
+  result back to the CRM's `/webhooks/n8n/delivery` endpoint. This is evaluated from
+  **inside n8n's own process/container**, not from the CRM's machine.
+
+- If n8n is running **on the same computer** as the CRM as a plain (non-Docker) local
+  install, it can reach the CRM at `127.0.0.1` or `localhost` without any extra setup —
+  leaving `N8N_CALLBACK_BASE_URL` unset (it falls back to `PUBLIC_BASE_URL`) is fine.
+- If n8n is running **in Docker** (including Docker Desktop on Windows) while the CRM runs
+  directly on the host, `localhost`/`127.0.0.1` inside the n8n container refers to **the
+  n8n container itself**, not your Windows host — so a callback built from `127.0.0.1`
+  will always fail with a connection-refused error from n8n's "Notify CRM (Callback)"
+  node, even though the CRM is running and reachable from everywhere else. Set, in the
+  CRM's `.env`:
+  ```
+  N8N_CALLBACK_BASE_URL=http://host.docker.internal:8000
+  ```
+  `host.docker.internal` is Docker Desktop's special DNS name that resolves to the host
+  machine from inside any container — it is not something you configure in n8n, only in
+  the CRM's own `.env`, since the CRM is the one that builds `callback_url` and hands it
+  to n8n in the payload. Restart the CRM backend after changing it. This does **not**
+  change `N8N_WEBHOOK_URL` — the CRM can continue reaching n8n at `localhost:5678` (or
+  whatever port you've mapped) exactly as before.
+
+  This alone is not enough: the CRM's `TrustedHostMiddleware` (`ALLOWED_HOSTS`) checks the
+  `Host` header on every incoming request, including this callback, and rejects anything
+  not on the allowlist with `400 Invalid host header` — a callback arriving with
+  `Host: host.docker.internal:8000` is rejected the same way an attacker's forged Host
+  header would be, until you explicitly allow it. In the CRM's `.env`, **append**
+  `host.docker.internal` to your existing `ALLOWED_HOSTS` value — do not replace the list,
+  add to it, since it still needs to keep serving `127.0.0.1`/`localhost` for your own
+  browser access:
+  ```env
+  ALLOWED_HOSTS=127.0.0.1,localhost,healthcheck.railway.app,host.docker.internal
+  ```
+  Restart the CRM backend after changing it. Do not add `host.docker.internal` to a
+  production `.env` — it only means anything on a machine that actually has Docker Desktop
+  running locally, and `app/config.py`'s production validation already refuses an empty or
+  wildcard `ALLOWED_HOSTS`, but it cannot detect an unnecessary local-only entry left in a
+  production value, so remove it yourself before deploying.
 - If you use **n8n Cloud** (n8n.io's hosted service), it runs on n8n's servers and
   **cannot reach `127.0.0.1` on your computer** — that address only means "this machine"
   to each computer individually.
-- For n8n Cloud to call your CRM's callback endpoint, the CRM must be reachable at a real,
-  publicly resolvable address — either a proper deployment (e.g. the Railway deployment
-  this project already documents) or a secure temporary tunnel (e.g. a tool like ngrok)
-  pointed at your local CRM while testing.
+- For n8n Cloud (or any n8n instance not on your machine/LAN) to call your CRM's callback
+  endpoint, the CRM must be reachable at a real, publicly resolvable address — either a
+  proper deployment (e.g. the Railway deployment this project already documents, in which
+  case set `N8N_CALLBACK_BASE_URL` to that deployment's URL) or a secure temporary tunnel
+  (e.g. a tool like ngrok) pointed at your local CRM while testing.
 - **Never expose the CRM to the internet without the authentication it already has
   enabled** (its normal login, and the `X-N8N-Webhook-Secret` check on the callback
   endpoint). A tunnel makes the CRM reachable from outside — it does not replace the need

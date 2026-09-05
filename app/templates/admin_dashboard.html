@@ -4,28 +4,160 @@
 <form class="filters card"><select name="campaign_id"><option value="">All campaigns</option>{% for c in campaigns %}<option value="{{c.id}}" {% if campaign_id==c.id %}selected{% endif %}>{{c.name}}</option>{% endfor %}</select><select name="offer_id"><option value="">All services</option>{% for o in offers %}<option value="{{o.id}}" {% if offer_id==o.id %}selected{% endif %}>{{o.name}}</option>{% endfor %}</select><input type="date" name="start" value="{{start}}"><input type="date" name="end" value="{{end}}"><button class="btn secondary">Filter</button></form>
 <div class="cards metric-cards"><div class="stat"><small>Registrations</small><strong>{{issued}}</strong><em>Issued records</em></div><div class="stat"><small>Redeemed</small><strong>{{redeemed}}</strong><em>Completed offers</em></div><div class="stat"><small>Conversion rate</small><strong>{{conversion}}%</strong><em>Redeemed / issued</em></div><div class="stat"><small>Expired</small><strong>{{expired}}</strong><em>Past validity</em></div></div>
 <div class="cards metric-cards"><div class="stat"><small>Email delivery</small><strong>{{email_rate}}%</strong><em>Sent or delivered</em></div><div class="stat"><small>WhatsApp delivery</small><strong>{{whatsapp_rate}}%</strong><em>Sent or delivered</em></div></div>
-<section class="card"><div class="card-heading"><div><h2>Registration and redemption trend</h2><p>Daily activity for the selected date range.</p></div><div class="chart-legend"><span><i class="chart-dot registrations"></i>Registrations</span><span><i class="chart-dot redemptions"></i>Redemptions</span></div></div><div id="analytics-empty" class="empty-state" hidden>No registration or redemption activity for this range.</div><svg id="analytics-chart" class="analytics-chart" viewBox="0 0 760 270" role="img" aria-label="Registrations and redemptions per day"></svg></section>
+<section class="card chart-card"><div class="card-heading"><div><h2>Registration and redemption trend</h2><p>Daily activity for the selected date range.</p></div><div class="chart-legend"><span><i class="chart-dot registrations"></i>Registrations</span><span><i class="chart-dot redemptions"></i>Redemptions</span></div></div><div id="analytics-loading" class="chart-loading">Loading chart…</div><div id="analytics-empty" class="empty-state" hidden>No registration or redemption activity for this range.</div><div class="analytics-chart-wrap"><svg id="analytics-chart" class="analytics-chart" viewBox="0 0 760 270" role="img" aria-label="Registrations and redemptions per day" hidden></svg></div></section>
 <section class="card table-card"><div class="card-heading"><div><h2>Staff performance</h2><p>Registration and redemption events grouped by staff account.</p></div></div><div class="table-wrap"><table><thead><tr><th>Staff member</th><th>Registrations</th><th>Redemptions</th></tr></thead><tbody>{% for row in staff_performance %}<tr><td>{{row.username}}</td><td>{{row.registrations}}</td><td>{{row.redemptions}}</td></tr>{% else %}<tr><td colspan="3">No staff accounts available.</td></tr>{% endfor %}</tbody></table></div></section>
 <section class="card table-card"><div class="card-heading"><div><h2>Registrations by beneficiary category</h2><p>Coverage under CGHS, ECHS, and other schemes for the selected filters.</p></div></div>{% if category_breakdown|sum(attribute='count') == 0 %}<div class="empty-state">No registrations match the selected filters.</div>{% else %}<div class="table-wrap"><table><thead><tr><th>Category</th><th>Registrations</th></tr></thead><tbody>{% for row in category_breakdown %}<tr><td>{{row.label}}</td><td>{{row.count}}</td></tr>{% endfor %}</tbody></table></div>{% endif %}</section>
 <section class="card"><div class="card-heading"><div><h2>Reports</h2><p>Export filtered campaign and patient data for analysis.</p></div></div><div class="actions"><a class="secondary btn" href="/admin/reports/campaigns.csv{% if report_query %}?{{report_query}}{% endif %}">Download campaign CSV</a><a class="secondary btn" href="/admin/reports/patients.csv{% if report_query %}?{{report_query}}{% endif %}">Download patient CSV</a></div></section>
 {% endblock %}
 {% block scripts %}
-<style>.analytics-chart{display:block;width:100%;min-height:270px}.chart-legend{display:flex;gap:15px;color:var(--muted);font-size:13px;font-weight:650}.chart-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}.chart-dot.registrations{background:#08aa91}.chart-dot.redemptions{background:#51419a}</style>
 <script>
 (() => {
+  // NOTE: chart-specific styling lives in style.css, not an inline CSS block here —
+  // this page's CSP (style-src 'self') silently drops inline stylesheet markup in real
+  // browsers, which is why the legend and chart sizing previously never actually applied.
   const series = {{ time_series|tojson }};
+  const chart = document.getElementById('analytics-chart');
+  const empty = document.getElementById('analytics-empty');
+  const loading = document.getElementById('analytics-loading');
   const labels = [...new Set([...series.registrations.map(row => row.day), ...series.redemptions.map(row => row.day)])].sort();
-  const chart = document.getElementById('analytics-chart'), empty = document.getElementById('analytics-empty');
-  if (!labels.length) { chart.hidden = true; empty.hidden = false; return; }
-  const ns = 'http://www.w3.org/2000/svg', width = 760, height = 270, pad = {left: 45, right: 18, top: 18, bottom: 42};
-  const values = labels.map(day => ({day, registrations: Number((series.registrations.find(row => row.day === day) || {}).count || 0), redemptions: Number((series.redemptions.find(row => row.day === day) || {}).count || 0)}));
-  const max = Math.max(1, ...values.flatMap(row => [row.registrations, row.redemptions]));
-  const make = (tag, attributes = {}) => { const node = document.createElementNS(ns, tag); Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, value)); chart.appendChild(node); return node; };
-  const x = index => pad.left + index * ((width - pad.left - pad.right) / Math.max(1, values.length - 1)), y = value => height - pad.bottom - value * ((height - pad.top - pad.bottom) / max);
-  for (let tick = 0; tick <= 4; tick++) { const value = max * tick / 4, pos = y(value); make('line', {x1: pad.left, y1: pos, x2: width - pad.right, y2: pos, stroke: '#e8efed'}); const text = make('text', {x: pad.left - 8, y: pos + 4, 'text-anchor': 'end', fill: '#73817c', 'font-size': 11}); text.textContent = Math.round(value); }
-  const line = (field, color) => { make('polyline', {points: values.map((row, index) => `${x(index)},${y(row[field])}`).join(' '), fill: 'none', stroke: color, 'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round'}); values.forEach((row, index) => make('circle', {cx: x(index), cy: y(row[field]), r: 3.5, fill: color})); };
-  line('registrations', '#08aa91'); line('redemptions', '#51419a');
-  values.forEach((row, index) => { const text = make('text', {x: x(index), y: height - 14, 'text-anchor': 'middle', fill: '#73817c', 'font-size': 10}); text.textContent = row.day.slice(5); });
+  loading.hidden = true;
+  if (!labels.length) { empty.hidden = false; return; }
+  chart.hidden = false;
+
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const humanDate = iso => { const [, month, day] = iso.split('-'); return `${day} ${MONTHS[Number(month) - 1]}`; };
+  const FIELD_LABEL = { registrations: 'Registrations', redemptions: 'Redemptions' };
+  const colors = { registrations: '#08aa91', redemptions: '#51419a' };
+
+  const values = labels.map(day => ({
+    day,
+    registrations: Number((series.registrations.find(row => row.day === day) || {}).count || 0),
+    redemptions: Number((series.redemptions.find(row => row.day === day) || {}).count || 0),
+  }));
+
+  // Whole-number y-axis ticks: pick a "nice" integer step (1/2/5/10x a power of ten)
+  // instead of dividing the max into 4 equal, often-fractional slices.
+  const niceStep = (maxValue, targetTicks) => {
+    const rawStep = maxValue / targetTicks;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const residual = rawStep / magnitude;
+    const niceResidual = residual <= 1 ? 1 : residual <= 2 ? 2 : residual <= 5 ? 5 : 10;
+    return Math.max(1, Math.round(niceResidual * magnitude));
+  };
+  const rawMax = Math.max(1, ...values.flatMap(row => [row.registrations, row.redemptions]));
+  const step = niceStep(rawMax, 4);
+  const max = Math.max(step, Math.ceil(rawMax / step) * step);
+  const ticks = [];
+  for (let value = 0; value <= max; value += step) ticks.push(value);
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const width = 760, height = 270, pad = { left: 40, right: 18, top: 18, bottom: 40 };
+  const plotBottom = height - pad.bottom;
+  const yFor = value => plotBottom - (value / max) * (plotBottom - pad.top);
+
+  while (chart.firstChild) chart.removeChild(chart.firstChild);
+  const make = (tag, attributes = {}, parent = chart) => {
+    const node = document.createElementNS(ns, tag);
+    Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, value));
+    parent.appendChild(node);
+    return node;
+  };
+
+  ticks.forEach(value => {
+    const pos = yFor(value);
+    make('line', { x1: pad.left, y1: pos, x2: width - pad.right, y2: pos, stroke: '#e8efed' });
+    const text = make('text', { x: pad.left - 10, y: pos + 4, 'text-anchor': 'end', fill: '#73817c', 'font-size': 11 });
+    text.textContent = value;
+  });
+
+  // Hover/focus tooltip built entirely in SVG (attributes, not the "style" attribute)
+  // so it isn't affected by the same CSP style-src restriction noted above.
+  const tooltip = make('g', { opacity: 0 });
+  const tooltipBg = make('rect', { rx: 8, ry: 8, fill: '#001a45' }, tooltip);
+  const tooltipDate = make('text', { 'font-size': 11, fill: '#ffffff', 'font-weight': 700 }, tooltip);
+  const tooltipReg = make('text', { 'font-size': 11, fill: '#5be3cd' }, tooltip);
+  const tooltipRed = make('text', { 'font-size': 11, fill: '#c6b9f7' }, tooltip);
+
+  const showTooltip = (row, anchorX, anchorY) => {
+    tooltipDate.textContent = humanDate(row.day);
+    tooltipReg.textContent = `${FIELD_LABEL.registrations}: ${row.registrations}`;
+    tooltipRed.textContent = `${FIELD_LABEL.redemptions}: ${row.redemptions}`;
+    const lineHeight = 15, padX = 10, padY = 9;
+    const widest = Math.max(...[tooltipDate, tooltipReg, tooltipRed].map(node => (
+      node.getComputedTextLength ? node.getComputedTextLength() : node.textContent.length * 6.5
+    )));
+    const boxWidth = widest + padX * 2, boxHeight = lineHeight * 3 + padY * 2 - 4;
+    const boxX = Math.max(2, Math.min(width - boxWidth - 2, anchorX - boxWidth / 2));
+    const boxY = Math.max(2, anchorY - boxHeight - 14);
+    tooltipBg.setAttribute('x', boxX); tooltipBg.setAttribute('y', boxY);
+    tooltipBg.setAttribute('width', boxWidth); tooltipBg.setAttribute('height', boxHeight);
+    [tooltipDate, tooltipReg, tooltipRed].forEach((node, index) => {
+      node.setAttribute('x', boxX + padX);
+      node.setAttribute('y', boxY + padY + 8 + lineHeight * index);
+    });
+    tooltip.setAttribute('opacity', 1);
+    chart.appendChild(tooltip); // always paint the tooltip above the data it's describing
+  };
+  const hideTooltip = () => tooltip.setAttribute('opacity', 0);
+
+  const wireHover = (node, row) => {
+    node.setAttribute('tabindex', '0');
+    ['mouseenter', 'mousemove', 'focus'].forEach(evt => node.addEventListener(evt, () => {
+      const cx = Number(node.getAttribute('data-cx')), cy = Number(node.getAttribute('data-cy'));
+      showTooltip(row, cx, cy);
+    }));
+    ['mouseleave', 'blur'].forEach(evt => node.addEventListener(evt, hideTooltip));
+    make('title', {}, node).textContent =
+      `${humanDate(row.day)} — ${FIELD_LABEL.registrations}: ${row.registrations}, ${FIELD_LABEL.redemptions}: ${row.redemptions}`;
+  };
+
+  if (values.length <= 2) {
+    // A line "trend" across only one or two points is misleading (it implies a
+    // continuous change that isn't there) — show a compact grouped bar comparison instead.
+    const plotWidth = width - pad.left - pad.right;
+    const groupWidth = Math.min(110, plotWidth / values.length - 30);
+    const barWidth = Math.max(16, groupWidth / 2 - 5);
+    const groupGap = 46;
+    const totalWidth = values.length * groupWidth + (values.length - 1) * groupGap;
+    const startX = pad.left + Math.max(0, (plotWidth - totalWidth) / 2);
+
+    values.forEach((row, index) => {
+      const groupX = startX + index * (groupWidth + groupGap);
+      ['registrations', 'redemptions'].forEach((field, slot) => {
+        const barX = groupX + slot * (barWidth + 8);
+        const barY = yFor(row[field]);
+        const bar = make('rect', {
+          x: barX, y: barY, width: barWidth, height: Math.max(0, plotBottom - barY),
+          fill: colors[field], rx: 4, 'data-cx': barX + barWidth / 2, 'data-cy': barY,
+        });
+        wireHover(bar, row);
+      });
+      const label = make('text', { x: groupX + groupWidth / 2, y: height - 14, 'text-anchor': 'middle', fill: '#73817c', 'font-size': 11 });
+      label.textContent = humanDate(row.day);
+    });
+  } else {
+    const xFor = index => pad.left + index * ((width - pad.left - pad.right) / (values.length - 1));
+    const drawLine = field => {
+      make('polyline', {
+        points: values.map((row, index) => `${xFor(index)},${yFor(row[field])}`).join(' '),
+        fill: 'none', stroke: colors[field], 'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+      });
+      values.forEach((row, index) => {
+        const cx = xFor(index), cy = yFor(row[field]);
+        const point = make('circle', { cx, cy, r: 4, fill: colors[field], 'data-cx': cx, 'data-cy': cy });
+        wireHover(point, row);
+      });
+    };
+    drawLine('registrations'); drawLine('redemptions');
+
+    // Thin x-axis labels so dense ranges don't overlap; always keep the last one.
+    const labelStep = Math.max(1, Math.ceil(values.length / 8));
+    values.forEach((row, index) => {
+      if (index % labelStep !== 0 && index !== values.length - 1) return;
+      const text = make('text', { x: xFor(index), y: height - 14, 'text-anchor': 'middle', fill: '#73817c', 'font-size': 11 });
+      text.textContent = humanDate(row.day);
+    });
+  }
 })();
 </script>
 {% endblock %}

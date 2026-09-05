@@ -118,6 +118,36 @@ def test_sent_to_failed_is_legal(client):
         db.close()
 
 
+def test_whatsapp_not_configured_callback_marks_previously_sent_attempt_as_failed_non_retryable(client):
+    """Mirrors the exact callback body n8n's 'Build FAILED Callback (WhatsApp Not
+    Configured)' node produces (n8n/crm-qr-delivery.json). The CRM dispatcher marks a
+    WHATSAPP row SENT as soon as n8n's webhook acknowledges receipt (responseMode
+    onReceived) — the row only reaches its real, final state once this callback arrives
+    from the (intentionally unconfigured) WhatsApp branch. A missing provider credential
+    cannot self-heal by retrying, so this callback's permanent=true must leave the row
+    non-retryable rather than eligible for another attempt."""
+    key = _row_in_status(client, "9400000013", "SENT")
+    response = _post(client, {
+        "idempotency_key": key,
+        "status": "FAILED",
+        "provider_message_id": None,
+        "failure_reason": (
+            "WhatsApp delivery is not yet configured for this clinic. Configure a Meta "
+            "WhatsApp Cloud API or Twilio WhatsApp credential in n8n to enable this channel."
+        ),
+        "permanent": True,
+    })
+    assert response.status_code == 200
+    db = SessionLocal()
+    try:
+        row = db.query(DeliveryLog).filter_by(idempotency_key=key).one()
+        assert row.status == "FAILED"
+        assert row.retryable is False
+        assert "not yet configured" in row.failure_reason
+    finally:
+        db.close()
+
+
 # --- Illegal transitions -----------------------------------------------
 
 def test_sending_to_delivered_is_rejected(client):
