@@ -34,7 +34,7 @@ def upgrade() -> None:
         )
 
     # 1. Nullable columns first.
-    with op.batch_alter_table("delivery_logs", recreate="always") as batch_op:
+    with op.batch_alter_table("delivery_logs") as batch_op:
         batch_op.add_column(sa.Column("delivery_intent_key", sa.String(40), nullable=True))
         batch_op.add_column(sa.Column("idempotency_key", sa.String(40), nullable=True))
         batch_op.add_column(sa.Column("attempt_number", sa.Integer(), nullable=True))
@@ -51,10 +51,10 @@ def upgrade() -> None:
     #    retryable by default.
     op.execute("UPDATE delivery_logs SET delivery_intent_key = 'legacy_' || id WHERE delivery_intent_key IS NULL")
     op.execute("UPDATE delivery_logs SET attempt_number = 1 WHERE attempt_number IS NULL")
-    op.execute("UPDATE delivery_logs SET retryable = 1 WHERE retryable IS NULL")
+    op.execute("UPDATE delivery_logs SET retryable = TRUE WHERE retryable IS NULL")
 
     # 4. NOT NULL + indexes/constraints only after backfill.
-    with op.batch_alter_table("delivery_logs", recreate="always") as batch_op:
+    with op.batch_alter_table("delivery_logs") as batch_op:
         batch_op.alter_column("delivery_intent_key", existing_type=sa.String(40), nullable=False)
         batch_op.alter_column("attempt_number", existing_type=sa.Integer(), nullable=False, server_default="1")
         batch_op.alter_column("retryable", existing_type=sa.Boolean(), nullable=False, server_default=sa.true())
@@ -68,7 +68,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("delivery_logs", recreate="always") as batch_op:
+    with op.batch_alter_table("delivery_logs") as batch_op:
         batch_op.drop_constraint("ck_delivery_logs_status", type_="check")
         batch_op.drop_constraint("uq_delivery_logs_intent_attempt", type_="unique")
         batch_op.drop_index("ux_delivery_logs_idempotency_key")

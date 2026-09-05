@@ -17,12 +17,12 @@ ALL_CATEGORY_VALUES = ("CAPF", "CGHS", "CISF", "DU", "ECHS", "NHAI", "NOT_APPLIC
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("patient_offers", recreate="always") as batch_op:
+    with op.batch_alter_table("patient_offers") as batch_op:
         batch_op.add_column(sa.Column("beneficiary_category", sa.String(20), nullable=True))
 
     op.execute("UPDATE patient_offers SET beneficiary_category = 'UNSPECIFIED' WHERE beneficiary_category IS NULL")
 
-    with op.batch_alter_table("patient_offers", recreate="always") as batch_op:
+    with op.batch_alter_table("patient_offers") as batch_op:
         batch_op.alter_column("beneficiary_category", existing_type=sa.String(20), nullable=False)
         batch_op.create_index("ix_patient_offers_beneficiary_category", ["beneficiary_category"], unique=False)
         batch_op.create_check_constraint(
@@ -32,7 +32,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("patient_offers", recreate="always") as batch_op:
+    with op.batch_alter_table("patient_offers") as batch_op:
         batch_op.drop_constraint("ck_patient_offers_beneficiary_category", type_="check")
         batch_op.drop_index("ix_patient_offers_beneficiary_category")
         batch_op.drop_column("beneficiary_category")
