@@ -7,7 +7,14 @@
   {% set brand_href = '/login' %}
 {% endif %}
 <aside class="sidebar" id="sidebar">
-  <a class="brand" href="{{ brand_href }}"><img src="/static/img/smriti-raj-dentistry.png" alt="Smriti Raj Dentistry"></a>
+  <div class="clinic-identity">
+    <a class="brand" href="{{ brand_href }}"><img src="/static/img/smriti-raj-dentistry.png" alt="Smriti Raj Dentistry"></a>
+    <div class="accreditation-row">
+      <span class="accreditation-coin"><img src="/static/img/nabh-accredited.png" alt="NABH Accredited – Patient Safety &amp; Quality of Care"></span>
+      <span class="accreditation-copy"><strong>NABH Accredited</strong><small>Patient Safety &amp; Quality of Care</small></span>
+    </div>
+  </div>
+  <hr class="sidebar-divider">
   <nav class="side-nav" aria-label="Main navigation">
     {% if request.session.get('role', 'admin') == 'admin' %}
       {% set admin_crm_active = path.startswith('/admin/dashboard') or path.startswith('/admin/campaigns') %}

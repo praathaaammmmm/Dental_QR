@@ -8,7 +8,7 @@ def test_login_uses_integrated_frontend_and_cursor(client):
 
 
 def test_static_frontend_assets_are_served(client):
-    for path in ("/static/style.css", "/static/cursor.css", "/static/cursor.js", "/static/portal.js"):
+    for path in ("/static/style.css", "/static/cursor.css", "/static/cursor.js", "/static/portal.js", "/static/img/nabh-accredited.png"):
         response = client.get(path)
         assert response.status_code == 200
         assert response.content
@@ -20,6 +20,8 @@ def test_authenticated_pages_share_integrated_layout(client):
         assert response.status_code == 200
         assert "Dentistry Ops" in response.text
         assert "/static/cursor.js" in response.text
+        assert '/static/img/nabh-accredited.png' in response.text
+        assert 'alt="NABH Accredited – Patient Safety &amp; Quality of Care"' in response.text
 
 
 def test_integrated_frontend_uses_real_backend_forms(client):

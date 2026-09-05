@@ -141,7 +141,7 @@ marked `SENT` or `FAILED`.
   "campaign": "Sunday Camp — Sept",
   "expires_at": "2026-09-14T00:00:00+00:00",
   "qr_base64_png": "<...>",
-  "callback_url": "https://<PUBLIC_BASE_URL>/webhooks/n8n/delivery"
+  "callback_url": "https://<N8N_CALLBACK_BASE_URL>/webhooks/n8n/delivery"
 }
 ```
 
@@ -150,8 +150,11 @@ for a retry attempt (`attempt_number > 1`); expiry reminders use
 `REGISTRATION_EXPIRY_REMINDER`. Only the recipient contact for the row's own channel is
 included — never the other channel's contact info. No beneficiary category, no passwords
 or secrets, no decoded/raw QR token — `qr_base64_png` is the same opaque, already-generated
-QR PNG used elsewhere in the app. `callback_url` is always built from `PUBLIC_BASE_URL`,
-never hardcoded in a workflow.
+QR PNG used elsewhere in the app. `callback_url` is always built from
+`N8N_CALLBACK_BASE_URL` (which defaults to `PUBLIC_BASE_URL` if unset — the two are
+distinct because n8n itself may run in a different network context than the CRM's own
+public address, e.g. inside Docker; see `n8n/README.md` section G), never hardcoded in a
+workflow.
 
 ## n8n → FastAPI callback
 
@@ -159,6 +162,15 @@ never hardcoded in a workflow.
 (constant-time compared). **Require HTTPS in front of this endpoint in every
 production-like deployment** — Railway terminates TLS ahead of the app, matching the
 existing `SESSION_HTTPS_ONLY`/`PUBLIC_BASE_URL` production gates in `app/config.py`.
+
+This endpoint is gated by two independent layers, both of which must accept the request
+before the handler ever runs: `TrustedHostMiddleware` checks the `Host` header against
+`ALLOWED_HOSTS` (rejecting anything else with `400 Invalid host header`, regardless of the
+secret), then the handler itself checks `X-N8N-Webhook-Secret`. When n8n runs in Docker and
+calls back via `host.docker.internal` (see `n8n/README.md` section G), both
+`N8N_CALLBACK_BASE_URL` (what n8n uses to reach the CRM) and `ALLOWED_HOSTS` (what the CRM
+accepts as the incoming `Host` header) must be updated together — the shared secret alone
+does not satisfy the host check.
 
 ```json
 {

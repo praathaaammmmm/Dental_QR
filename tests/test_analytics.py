@@ -69,6 +69,15 @@ def test_admin_dashboard_and_csv_exports_are_available_to_admin_only(client):
     dashboard = client.get("/admin/dashboard")
     assert dashboard.status_code == 200
     assert 'id="analytics-chart"' in dashboard.text
+    assert "<style>" not in dashboard.text, (
+        "the dashboard's Content-Security-Policy is style-src 'self', which silently "
+        "drops inline <style> blocks in real browsers -- chart CSS must live in style.css"
+    )
+    assert 'id="analytics-loading"' in dashboard.text
+    assert 'id="analytics-empty"' in dashboard.text
+    assert 'class="chart-legend"' in dashboard.text
+    assert 'class="chart-dot registrations"' in dashboard.text
+    assert 'class="chart-dot redemptions"' in dashboard.text
     campaign_csv = client.get("/admin/reports/campaigns.csv")
     patient_csv = client.get("/admin/reports/patients.csv")
     assert campaign_csv.status_code == 200 and "Campaign" in campaign_csv.text
@@ -84,3 +93,15 @@ def test_admin_dashboard_and_csv_exports_are_available_to_admin_only(client):
     response = client.post("/staff/login", data={"username": "analytics-staff", "password": "password"}, follow_redirects=False)
     assert response.status_code == 303
     assert client.get("/admin/reports/patients.csv", follow_redirects=False).status_code == 403
+
+
+def test_dashboard_chart_css_is_served_from_the_external_stylesheet(client):
+    """The chart's legend/dot/loading styling must live in the externally-served
+    stylesheet (allowed by style-src 'self'), not an inline <style> tag on the page
+    (silently dropped by the same CSP), or the legend renders as unstyled, cramped text."""
+    stylesheet = client.get("/static/style.css")
+    assert stylesheet.status_code == 200
+    assert ".chart-legend{display:flex" in stylesheet.text
+    assert ".chart-dot.registrations{background:#08aa91}" in stylesheet.text
+    assert ".chart-dot.redemptions{background:#51419a}" in stylesheet.text
+    assert ".chart-loading{" in stylesheet.text

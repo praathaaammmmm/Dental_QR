@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .audit_service import audit
-from .config import PUBLIC_BASE_URL
+from .config import N8N_CALLBACK_BASE_URL
 from .models import AuditLog, PatientOffer
 from .n8n_service import trigger_delivery
 from .services.delivery_service import CALLBACK_PATH, new_key
@@ -43,7 +43,7 @@ def _reminder_payload(coupon: PatientOffer) -> dict:
         "service": coupon.offer.name,
         "campaign": coupon.campaign.name if coupon.campaign else patient.campaign_name,
         "expires_at": coupon.expires_at.isoformat(),
-        "callback_url": f"{PUBLIC_BASE_URL}{CALLBACK_PATH}",
+        "callback_url": f"{N8N_CALLBACK_BASE_URL}{CALLBACK_PATH}",
     }
 
 

@@ -389,6 +389,57 @@ def test_unique_constraint_prevents_duplicate_attempt_number_for_intent(client):
         db.close()
 
 
+# --- Callback URL construction ------------------------------------------------
+
+def test_payload_callback_url_uses_n8n_callback_base_url_when_configured(client, monkeypatch):
+    """n8n itself must be able to reach the CRM's callback endpoint. That address can
+    differ from PUBLIC_BASE_URL (e.g. n8n running in Docker, where 127.0.0.1 resolves to
+    the container, not the host) so callback_url must be built from the dedicated,
+    n8n-reachable setting."""
+    monkeypatch.setattr(delivery_service, "N8N_CALLBACK_BASE_URL", "http://host.docker.internal:8000")
+    captured = []
+
+    def fake_trigger(payload):
+        captured.append(payload)
+        return {"status": "SENT", "workflow_id": "exec-cb"}
+
+    monkeypatch.setattr(delivery_service, "trigger_delivery", fake_trigger)
+
+    db = SessionLocal()
+    try:
+        _register(db, "9300000019", email="callback-url@example.com")
+        dispatch_pending_deliveries(db, now=utc_now())
+        assert captured, "expected trigger_delivery to be called"
+        for payload in captured:
+            assert payload["callback_url"] == "http://host.docker.internal:8000/webhooks/n8n/delivery"
+    finally:
+        db.close()
+
+
+def test_payload_callback_url_falls_back_to_public_base_url_when_unset(client, monkeypatch):
+    """N8N_CALLBACK_BASE_URL defaults to PUBLIC_BASE_URL (config.py) when not set
+    separately, so existing single-machine deployments keep working unchanged."""
+    from app.config import PUBLIC_BASE_URL
+    monkeypatch.setattr(delivery_service, "N8N_CALLBACK_BASE_URL", PUBLIC_BASE_URL)
+    captured = []
+
+    def fake_trigger(payload):
+        captured.append(payload)
+        return {"status": "SENT", "workflow_id": "exec-cb2"}
+
+    monkeypatch.setattr(delivery_service, "trigger_delivery", fake_trigger)
+
+    db = SessionLocal()
+    try:
+        _register(db, "9300000020", email="callback-fallback@example.com")
+        dispatch_pending_deliveries(db, now=utc_now())
+        assert captured, "expected trigger_delivery to be called"
+        for payload in captured:
+            assert payload["callback_url"] == f"{PUBLIC_BASE_URL}/webhooks/n8n/delivery"
+    finally:
+        db.close()
+
+
 def test_retry_is_idempotent_across_repeated_ticks(client):
     db = SessionLocal()
     try:
