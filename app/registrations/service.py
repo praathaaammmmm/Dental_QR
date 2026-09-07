@@ -93,7 +93,7 @@ def register_patient_offer(
             raise CampaignUnavailableError("Please select an active campaign.")
         if not (campaign.start_date <= now.date() <= campaign.end_date):
             raise CampaignUnavailableError("The selected campaign is not active for today's date.")
-        if campaign.offers and offer.id not in {item.id for item in campaign.offers}:
+        if offer.id not in {item.id for item in campaign.offers}:
             raise OfferUnavailableError("The selected service is not part of this campaign.")
 
         registration_week = sunday_for(now)
