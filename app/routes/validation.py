@@ -51,7 +51,11 @@ def validation_result(request: Request, coupon_uid: str):
             return RedirectResponse("/validate", status_code=303)
         refresh_expiry(coupon, utc_now())
         db.commit()
-        return request.app.state.templates.TemplateResponse(request, "validate.html", {"request": request, "result": result_for(coupon), "token": ""})
+        result = result_for(coupon)
+        if result["kind"] == "REDEEMED" and request.session.get("just_redeemed") == coupon.coupon_uid:
+            request.session.pop("just_redeemed", None)
+            result = {"kind": "JUST_REDEEMED", "coupon": coupon}
+        return request.app.state.templates.TemplateResponse(request, "validate.html", {"request": request, "result": result, "token": ""})
     finally:
         db.close()
 
@@ -75,7 +79,10 @@ def redeem(request: Request, coupon_id: int, _csrf: None = Depends(require_csrf)
                 patient_id=coupon.patient_id,
             ))
             db.commit()
-            return RedirectResponse(f"/validate/result/{coupon.coupon_uid}", status_code=303)
+            # One-time flash: only the very next load of this coupon's result page shows
+            # the "just redeemed" success receipt. Any later visit (or reload after that
+            # first view pops it) falls back to the plain "already used" state.
+            request.session["just_redeemed"] = coupon.coupon_uid
         return RedirectResponse(f"/validate/result/{coupon.coupon_uid}", status_code=303)
     finally:
         db.close()

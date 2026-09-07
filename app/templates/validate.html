@@ -26,12 +26,15 @@
 </div>
 {% if result %}
 <section class="card result-panel {{ result.kind|lower }}">
-  <div class="result-symbol">{% if result.kind == 'VALID' %}✓{% else %}×{% endif %}</div>
+  <div class="result-symbol">{% if result.kind in ('VALID', 'JUST_REDEEMED') %}✓{% else %}×{% endif %}</div>
   <div class="result-copy">
   {% if result.kind == 'VALID' %}
     <span class="eyebrow">VALIDATION SUCCESSFUL</span><h2>OFFER VALID</h2><p>This QR is active and may be redeemed once.</p>
     <div class="result-details"><span><small>Patient</small><b>{{ result.coupon.patient.full_name }}</b></span><span><small>Offer</small><b>{{ result.coupon.offer.name }}</b></span><span><small>Expires</small><b>{{ result.coupon.expires_at|clinic_time('%d %b %Y') }}</b></span><span><small>Status</small><b class="badge active">ACTIVE</b></span></div>
     <form method="post" action="{{ redeem_url|default('/redeem/' ~ result.coupon.id) }}" onsubmit="return confirm('Redeem this offer? This cannot be undone.')"><input type="hidden" name="_csrf_token" value="{{ csrf_token(request) }}"><button class="danger btn">Redeem offer</button></form>
+  {% elif result.kind == 'JUST_REDEEMED' %}
+    <span class="eyebrow">REDEMPTION SUCCESSFUL</span><h2>Offer redeemed successfully</h2><p>This offer has been marked as used and cannot be redeemed again.</p>
+    <div class="result-details"><span><small>Patient</small><b>{{ result.coupon.patient.full_name }}</b></span><span><small>Service</small><b>{{ result.coupon.offer.name }}</b></span><span><small>QR ID</small><b>{{ result.coupon.coupon_uid }}</b></span><span><small>Redeemed</small><b>{{ result.coupon.redeemed_at|clinic_time('%d %b %Y, %I:%M %p') }} IST</b></span></div>
   {% elif result.kind == 'REDEEMED' %}
     <span class="eyebrow">REDEMPTION BLOCKED</span><h2>OFFER ALREADY USED</h2><p><b>{{ result.coupon.patient.full_name }}</b> used this offer on {{ result.coupon.redeemed_at|clinic_time('%d %b %Y, %I:%M %p') }} IST. This QR cannot be used again.</p>
   {% elif result.kind == 'EXPIRED' %}

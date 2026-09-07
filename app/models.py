@@ -37,6 +37,7 @@ class StaffUser(Base):
     role: Mapped[str] = mapped_column(String(20), default="staff", index=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 class Offer(Base):
     __tablename__ = "offers"

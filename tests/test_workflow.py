@@ -21,8 +21,11 @@ def test_valid_then_redeemed_then_second_attempt_fails(client):
     client.post("/patients/register", data=registration("Double Use", "9999999998"))
     db = SessionLocal(); coupon = db.query(PatientOffer).first(); token = token_for(coupon.coupon_uid); cid = coupon.id; db.close()
     assert "OFFER VALID" in client.post("/validate", data={"token":token}).text
-    assert "OFFER ALREADY USED" in client.post(f"/redeem/{cid}", follow_redirects=True).text
+    # The redirect straight after a successful redemption shows the success receipt, not
+    # "already used" -- that state is reserved for a later, separate validation attempt.
+    assert "Offer redeemed successfully" in client.post(f"/redeem/{cid}", follow_redirects=True).text
     db = SessionLocal(); assert db.get(PatientOffer, cid).status == "REDEEMED"; db.close()
+    assert "OFFER ALREADY USED" in client.post("/validate", data={"token":token}).text
 
 def test_invalid_token(client):
     assert "INVALID QR" in client.post("/validate", data={"token":"SRD-NOT-REAL"}).text
