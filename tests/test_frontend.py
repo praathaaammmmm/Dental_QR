@@ -45,6 +45,27 @@ def test_authenticated_header_drops_decorative_icons_but_keeps_navigation(client
     assert 'Sign out' in text
 
 
+def test_registration_service_cards_do_not_claim_a_hardcoded_validity_duration(client):
+    """A service's actual validity window comes from its campaign's date range, decided
+    at registration time -- the offer-selection card must never claim a fixed duration
+    (e.g. "Valid for 10 days") up front, since that's not the same thing and can be
+    wrong for the campaign the admin/staff ends up choosing. One-time-use redemption is
+    still enforced entirely server-side (redeem_atomic's conditional UPDATE) regardless
+    of what this card displays."""
+    from tests.test_staff_interface import _login_as_staff
+
+    admin_page = client.get("/patients/register")
+    assert admin_page.status_code == 200
+    assert "Valid for 10 days" not in admin_page.text
+    assert "One-time use" not in admin_page.text
+
+    _login_as_staff(client)
+    staff_page = client.get("/staff/register")
+    assert staff_page.status_code == 200
+    assert "Valid for 10 days" not in staff_page.text
+    assert "One-time use" not in staff_page.text
+
+
 def test_integrated_frontend_uses_real_backend_forms(client):
     registration = client.get("/patients/register")
     assert 'name="full_name"' in registration.text
