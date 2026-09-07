@@ -5,6 +5,24 @@ from app.routes.auth import _attempts
 from tests.test_staff_interface import _create_staff, _login_as_staff
 
 
+def test_staff_page_renders_after_removal_with_mixed_staff_states(client):
+    """Regression test for a 500 on GET /admin/staff: the page must render for an
+    authenticated admin regardless of whether any staff accounts are active, merely
+    deactivated (toggled off but not removed), or removed/archived."""
+    active_id = _create_staff(username="mixed-active-staff", password="mixed-active-password")
+    deactivated_id = _create_staff(username="mixed-deactivated-staff", password="mixed-deactivated-password")
+    removed_id = _create_staff(username="mixed-removed-staff", password="mixed-removed-password")
+
+    client.post(f"/admin/staff/{deactivated_id}/toggle")
+    client.post(f"/admin/staff/{removed_id}/remove")
+
+    response = client.get("/admin/staff")
+    assert response.status_code == 200
+    assert "mixed-active-staff" in response.text
+    assert "mixed-deactivated-staff" in response.text
+    assert "mixed-removed-staff" not in response.text
+
+
 def test_removing_staff_revokes_access_and_hides_from_active_list(client):
     staff_id = _create_staff(username="removable-staff", password="removable-password")
 

@@ -6,13 +6,13 @@
   <title>{% block title %}Smriti Raj Dentistry{% endblock %} · Dentistry Ops</title>
   <link rel="icon" type="image/png" href="/static/img/smriti-raj-dentistry.png">
   <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/cursor.css">
+  {% if not request.session.get('user') %}<link rel="stylesheet" href="/static/cursor.css">{% endif %}
 </head>
 <body class="{% if request.session.get('user') %}portal-body{% else %}login-body{% endif %}">
 {% if request.session.get("user") %}
 {% include "includes/sidebar.html" %}
 <header class="mobile-header"><button type="button" class="menu-button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">☰</button><img src="/static/img/smriti-raj-dentistry.png" alt="Smriti Raj Dentistry"></header>
-<header class="top-header"><strong>{% block section_title %}Operations{% endblock %}</strong><div><span aria-hidden="true">♢</span><span aria-hidden="true">?</span><span class="staff-avatar">SR</span></div></header>
+<header class="top-header"><strong>{% block section_title %}Operations{% endblock %}</strong></header>
 {% endif %}
 <main class="{% if request.session.get('user') %}app-main{% else %}login-main{% endif %}">
   {% if request.session.get("user") %}
@@ -21,7 +21,7 @@
   {% if request.query_params.get("message") %}<div class="notice">{{ request.query_params.get("message") }}</div>{% endif %}
   {% block content %}{% endblock %}
 </main>
-<script src="/static/cursor.js"></script>
+{% if not request.session.get('user') %}<script src="/static/cursor.js"></script>{% endif %}
 <script src="/static/portal.js"></script>
 {% block scripts %}{% endblock %}
 </body>

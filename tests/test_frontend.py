@@ -15,13 +15,34 @@ def test_static_frontend_assets_are_served(client):
 
 
 def test_authenticated_pages_share_integrated_layout(client):
+    # The decorative custom-cursor effect and the top-header's diamond/help/avatar
+    # icons are login-page-only flourishes; the authenticated CRM chrome deliberately
+    # drops them (kept: sidebar navigation, sign-out, section title).
     for path in ("/", "/patients", "/patients/register", "/offers", "/validate", "/redemptions", "/delivery"):
         response = client.get(path)
         assert response.status_code == 200
         assert "Dentistry Ops" in response.text
-        assert "/static/cursor.js" in response.text
+        assert "/static/cursor.js" not in response.text
+        assert "/static/cursor.css" not in response.text
         assert '/static/img/nabh-accredited.png' in response.text
         assert 'alt="NABH Accredited – Patient Safety &amp; Quality of Care"' in response.text
+
+
+def test_authenticated_header_drops_decorative_icons_but_keeps_navigation(client):
+    response = client.get("/admin/dashboard")
+    assert response.status_code == 200
+    text = response.text
+    assert 'class="staff-avatar"' not in text
+    assert '<span aria-hidden="true">♢</span>' not in text
+    assert '<span aria-hidden="true">?</span>' not in text
+    # The top-header bar itself (section title) stays; only the icon cluster is gone --
+    # no leftover empty wrapper div in its place.
+    assert '<header class="top-header">' in text
+    assert '<header class="top-header"><strong>' in text
+    # Sidebar navigation and sign-out remain fully available.
+    assert 'aside class="sidebar"' in text
+    assert 'action="/logout"' in text or 'action="/staff/logout"' in text
+    assert 'Sign out' in text
 
 
 def test_integrated_frontend_uses_real_backend_forms(client):
