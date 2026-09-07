@@ -74,10 +74,10 @@ def remove_staff(request: Request, staff_id: int, _csrf: None = Depends(require_
         if user.role != "staff":
             return RedirectResponse("/admin/staff?message=This account cannot be removed", status_code=303)
         if user.removed_at:
-            return RedirectResponse("/admin/staff?message=Staff account already removed", status_code=303)
+            return RedirectResponse("/admin/staff?message=That staff account was already removed.", status_code=303)
         user.active = False
         user.removed_at = utc_now()
         audit(db, request.session.get("user", "admin"), "STAFF_ACCOUNT_REMOVED", details={"username": user.username})
         db.commit()
-        return RedirectResponse("/admin/staff?message=Staff account removed", status_code=303)
+        return RedirectResponse("/admin/staff?message=Staff account removed and access revoked.", status_code=303)
     finally: db.close()
