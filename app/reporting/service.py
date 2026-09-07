@@ -67,6 +67,19 @@ def daily_time_series(db: Session, campaign_id=None, offer_id=None, start: date 
     return {"registrations": [dict(row) for row in registrations], "redemptions": [dict(row) for row in redemptions]}
 
 
+def default_chart_mode(time_series: dict) -> str:
+    """Chart-type toggle default for the dashboard trend chart: up to 7 displayed dates
+    reads clearly as discrete bars; beyond that a line keeps a denser range legible.
+    "Displayed dates" is the same union of registration/redemption day labels the chart
+    itself renders on its x-axis (``daily_time_series``'s output), not the raw span
+    between the filter form's start/end dates -- a wide range with sparse activity can
+    have far fewer displayed dates than calendar days. This is only the default; the
+    dashboard's Bars/Line toggle lets the user override it without a page reload.
+    """
+    days = {row["day"] for row in time_series["registrations"]} | {row["day"] for row in time_series["redemptions"]}
+    return "bars" if len(days) <= 7 else "line"
+
+
 def staff_performance(db: Session, start: date | None = None, end: date | None = None) -> list[dict]:
     join_conditions = [
         AuditLog.user == StaffUser.username,

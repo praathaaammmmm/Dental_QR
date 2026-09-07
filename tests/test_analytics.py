@@ -4,7 +4,7 @@ from app.audit_service import audit
 from app.auth import password_hasher
 from app.database import SessionLocal
 from app.models import PatientOffer, StaffUser
-from app.reporting.service import daily_time_series, staff_performance
+from app.reporting.service import daily_time_series, default_chart_mode, staff_performance
 from app.time_utils import utc_now
 
 
@@ -105,3 +105,57 @@ def test_dashboard_chart_css_is_served_from_the_external_stylesheet(client):
     assert ".chart-dot.registrations{background:#08aa91}" in stylesheet.text
     assert ".chart-dot.redemptions{background:#51419a}" in stylesheet.text
     assert ".chart-loading{" in stylesheet.text
+    assert ".chart-mode-btn" in stylesheet.text
+    assert '.chart-mode-btn[aria-pressed="true"]' in stylesheet.text
+
+
+def test_dashboard_chart_has_bars_and_line_mode_toggle_beside_the_legend(client):
+    """Both chart-type controls must exist beside the legend, be clearly labelled,
+    keyboard-focusable (plain <button>s), and expose their pressed state for a11y."""
+    dashboard = client.get("/admin/dashboard")
+    assert dashboard.status_code == 200
+    text = dashboard.text
+    assert '<style>' not in text
+    assert 'class="chart-controls"' in text
+    assert 'class="chart-mode-toggle" role="group" aria-label="Chart type"' in text
+    assert '<button type="button" id="chart-mode-bars" class="chart-mode-btn" aria-pressed="false" hidden>Bars</button>' in text
+    assert '<button type="button" id="chart-mode-line" class="chart-mode-btn" aria-pressed="false" hidden>Line</button>' in text
+
+
+def test_dashboard_chart_script_renders_both_modes_from_the_same_embedded_data(client):
+    """Both rendering paths must exist client-side and read from the single embedded
+    `values` series (no second network round-trip / no separate data source per mode)."""
+    dashboard = client.get("/admin/dashboard")
+    text = dashboard.text
+    assert "const series = " in text
+    assert "const renderBars = wireHover =>" in text
+    assert "const renderLine = wireHover =>" in text
+    assert "const RENDERERS = { bars: renderBars, line: renderLine };" in text
+    assert "barsBtn.addEventListener('click'" in text
+    assert "lineBtn.addEventListener('click'" in text
+    # Both toggle handlers call the same renderChart(mode) against the same `values` --
+    # switching redraws in place rather than re-fetching the page.
+    assert "renderChart(mode)" in text
+
+
+def test_default_chart_mode_is_bars_up_to_seven_dates_else_line():
+    """Pure unit test of the server-side default-mode decision (app/reporting/service.py)
+    -- the single source of truth the dashboard route embeds into the page. "Displayed
+    dates" is the union of registration/redemption day labels, not a raw calendar span."""
+    seven_days = {"registrations": [{"day": f"2026-01-0{n}", "count": 1} for n in range(1, 8)], "redemptions": []}
+    eight_days = {"registrations": [{"day": f"2026-01-0{n}", "count": 1} for n in range(1, 9)], "redemptions": []}
+    assert default_chart_mode(seven_days) == "bars"
+    assert default_chart_mode(eight_days) == "line"
+
+    # A registration day and a disjoint redemption day both count toward the displayed total.
+    mixed = {"registrations": [{"day": "2026-01-01", "count": 1}], "redemptions": [{"day": "2026-01-02", "count": 1}]}
+    assert default_chart_mode(mixed) == "bars"
+
+
+def test_dashboard_embeds_the_server_decided_default_mode_for_the_client_toggle_to_read(client):
+    """The client doesn't recompute the default -- it reads the exact value the dashboard
+    route computed from this page's own time_series, so it can never drift from it."""
+    dashboard = client.get("/admin/dashboard")
+    text = dashboard.text
+    assert 'data-default-mode="bars"' in text or 'data-default-mode="line"' in text
+    assert "chart.dataset.defaultMode === 'line' ? 'line' : 'bars'" in text

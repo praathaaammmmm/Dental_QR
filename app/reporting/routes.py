@@ -8,8 +8,8 @@ from ..auth import require_admin
 from ..models import Campaign, Offer
 from ..query_params import optional_int
 from .service import (
-    campaign_performance, counts, daily_time_series, dashboard_summary, delivery_summary,
-    patient_export_rows, registrations_by_category, staff_performance,
+    campaign_performance, counts, daily_time_series, dashboard_summary, default_chart_mode,
+    delivery_summary, patient_export_rows, registrations_by_category, staff_performance,
 )
 
 router = APIRouter(prefix="/admin")
@@ -51,6 +51,7 @@ def dashboard(request: Request, campaign_id: str = Query(""), offer_id: str = Qu
         campaigns = db.query(Campaign).order_by(Campaign.created_at.desc()).all()
         offers = db.query(Offer).order_by(Offer.name).all()
         deliveries = delivery_summary(db, campaign_id, offer_id, start_date, end_date)
+        time_series = daily_time_series(db, campaign_id, offer_id, start_date, end_date)
         report_query = urlencode({key: value for key, value in {
             "campaign_id": campaign_id, "offer_id": offer_id, "start": start, "end": end,
         }.items() if value not in (None, "")})
@@ -60,7 +61,8 @@ def dashboard(request: Request, campaign_id: str = Query(""), offer_id: str = Qu
             "campaign_id": campaign_id, "offer_id": offer_id, "start": start, "end": end,
             "email_rate": round(deliveries["email_sent"] * 100 / deliveries["email_total"], 1) if deliveries["email_total"] else 0,
             "whatsapp_rate": round(deliveries["whatsapp_sent"] * 100 / deliveries["whatsapp_total"], 1) if deliveries["whatsapp_total"] else 0,
-            "time_series": daily_time_series(db, campaign_id, offer_id, start_date, end_date),
+            "time_series": time_series,
+            "default_chart_mode": default_chart_mode(time_series),
             "staff_performance": staff_performance(db, start_date, end_date),
             "category_breakdown": registrations_by_category(db, campaign_id, offer_id, start_date, end_date),
             "report_query": report_query,

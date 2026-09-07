@@ -4,7 +4,7 @@
 <form class="filters card"><select name="campaign_id"><option value="">All campaigns</option>{% for c in campaigns %}<option value="{{c.id}}" {% if campaign_id==c.id %}selected{% endif %}>{{c.name}}</option>{% endfor %}</select><select name="offer_id"><option value="">All services</option>{% for o in offers %}<option value="{{o.id}}" {% if offer_id==o.id %}selected{% endif %}>{{o.name}}</option>{% endfor %}</select><input type="date" name="start" value="{{start}}"><input type="date" name="end" value="{{end}}"><button class="btn secondary">Filter</button></form>
 <div class="cards metric-cards"><div class="stat"><small>Registrations</small><strong>{{issued}}</strong><em>Issued records</em></div><div class="stat"><small>Redeemed</small><strong>{{redeemed}}</strong><em>Completed offers</em></div><div class="stat"><small>Conversion rate</small><strong>{{conversion}}%</strong><em>Redeemed / issued</em></div><div class="stat"><small>Expired</small><strong>{{expired}}</strong><em>Past validity</em></div></div>
 <div class="cards metric-cards"><div class="stat"><small>Email delivery</small><strong>{{email_rate}}%</strong><em>Sent or delivered</em></div><div class="stat"><small>WhatsApp delivery</small><strong>{{whatsapp_rate}}%</strong><em>Sent or delivered</em></div></div>
-<section class="card chart-card"><div class="card-heading"><div><h2>Registration and redemption trend</h2><p>Daily activity for the selected date range.</p></div><div class="chart-legend"><span><i class="chart-dot registrations"></i>Registrations</span><span><i class="chart-dot redemptions"></i>Redemptions</span></div></div><div id="analytics-loading" class="chart-loading">Loading chart…</div><div id="analytics-empty" class="empty-state" hidden>No registration or redemption activity for this range.</div><div class="analytics-chart-wrap"><svg id="analytics-chart" class="analytics-chart" viewBox="0 0 760 270" role="img" aria-label="Registrations and redemptions per day" hidden></svg></div></section>
+<section class="card chart-card"><div class="card-heading"><div><h2>Registration and redemption trend</h2><p>Daily activity for the selected date range.</p></div><div class="chart-controls"><div class="chart-legend"><span><i class="chart-dot registrations"></i>Registrations</span><span><i class="chart-dot redemptions"></i>Redemptions</span></div><div class="chart-mode-toggle" role="group" aria-label="Chart type"><button type="button" id="chart-mode-bars" class="chart-mode-btn" aria-pressed="false" hidden>Bars</button><button type="button" id="chart-mode-line" class="chart-mode-btn" aria-pressed="false" hidden>Line</button></div></div></div><div id="analytics-loading" class="chart-loading">Loading chart…</div><div id="analytics-empty" class="empty-state" hidden>No registration or redemption activity for this range.</div><div class="analytics-chart-wrap"><svg id="analytics-chart" class="analytics-chart" viewBox="0 0 760 270" role="img" aria-label="Registrations and redemptions per day" data-default-mode="{{ default_chart_mode }}" hidden></svg></div></section>
 <section class="card table-card"><div class="card-heading"><div><h2>Staff performance</h2><p>Registration and redemption events grouped by staff account.</p></div></div><div class="table-wrap"><table><thead><tr><th>Staff member</th><th>Registrations</th><th>Redemptions</th></tr></thead><tbody>{% for row in staff_performance %}<tr><td>{{row.username}}</td><td>{{row.registrations}}</td><td>{{row.redemptions}}</td></tr>{% else %}<tr><td colspan="3">No staff accounts available.</td></tr>{% endfor %}</tbody></table></div></section>
 <section class="card table-card"><div class="card-heading"><div><h2>Registrations by beneficiary category</h2><p>Coverage under CGHS, ECHS, and other schemes for the selected filters.</p></div></div>{% if category_breakdown|sum(attribute='count') == 0 %}<div class="empty-state">No registrations match the selected filters.</div>{% else %}<div class="table-wrap"><table><thead><tr><th>Category</th><th>Registrations</th></tr></thead><tbody>{% for row in category_breakdown %}<tr><td>{{row.label}}</td><td>{{row.count}}</td></tr>{% endfor %}</tbody></table></div>{% endif %}</section>
 <section class="card"><div class="card-heading"><div><h2>Reports</h2><p>Export filtered campaign and patient data for analysis.</p></div></div><div class="actions"><a class="secondary btn" href="/admin/reports/campaigns.csv{% if report_query %}?{{report_query}}{% endif %}">Download campaign CSV</a><a class="secondary btn" href="/admin/reports/patients.csv{% if report_query %}?{{report_query}}{% endif %}">Download patient CSV</a></div></section>
@@ -19,10 +19,14 @@
   const chart = document.getElementById('analytics-chart');
   const empty = document.getElementById('analytics-empty');
   const loading = document.getElementById('analytics-loading');
+  const barsBtn = document.getElementById('chart-mode-bars');
+  const lineBtn = document.getElementById('chart-mode-line');
   const labels = [...new Set([...series.registrations.map(row => row.day), ...series.redemptions.map(row => row.day)])].sort();
   loading.hidden = true;
   if (!labels.length) { empty.hidden = false; return; }
   chart.hidden = false;
+  barsBtn.hidden = false;
+  lineBtn.hidden = false;
 
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const humanDate = iso => { const [, month, day] = iso.split('-'); return `${day} ${MONTHS[Number(month) - 1]}`; };
@@ -53,9 +57,9 @@
   const ns = 'http://www.w3.org/2000/svg';
   const width = 760, height = 270, pad = { left: 40, right: 18, top: 18, bottom: 40 };
   const plotBottom = height - pad.bottom;
+  const plotWidth = width - pad.left - pad.right;
   const yFor = value => plotBottom - (value / max) * (plotBottom - pad.top);
 
-  while (chart.firstChild) chart.removeChild(chart.firstChild);
   const make = (tag, attributes = {}, parent = chart) => {
     const node = document.createElementNS(ns, tag);
     Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, value));
@@ -63,62 +67,66 @@
     return node;
   };
 
-  ticks.forEach(value => {
-    const pos = yFor(value);
-    make('line', { x1: pad.left, y1: pos, x2: width - pad.right, y2: pos, stroke: '#e8efed' });
-    const text = make('text', { x: pad.left - 10, y: pos + 4, 'text-anchor': 'end', fill: '#73817c', 'font-size': 11 });
-    text.textContent = value;
-  });
-
-  // Hover/focus tooltip built entirely in SVG (attributes, not the "style" attribute)
-  // so it isn't affected by the same CSP style-src restriction noted above.
-  const tooltip = make('g', { opacity: 0 });
-  const tooltipBg = make('rect', { rx: 8, ry: 8, fill: '#001a45' }, tooltip);
-  const tooltipDate = make('text', { 'font-size': 11, fill: '#ffffff', 'font-weight': 700 }, tooltip);
-  const tooltipReg = make('text', { 'font-size': 11, fill: '#5be3cd' }, tooltip);
-  const tooltipRed = make('text', { 'font-size': 11, fill: '#c6b9f7' }, tooltip);
-
-  const showTooltip = (row, anchorX, anchorY) => {
-    tooltipDate.textContent = humanDate(row.day);
-    tooltipReg.textContent = `${FIELD_LABEL.registrations}: ${row.registrations}`;
-    tooltipRed.textContent = `${FIELD_LABEL.redemptions}: ${row.redemptions}`;
-    const lineHeight = 15, padX = 10, padY = 9;
-    const widest = Math.max(...[tooltipDate, tooltipReg, tooltipRed].map(node => (
-      node.getComputedTextLength ? node.getComputedTextLength() : node.textContent.length * 6.5
-    )));
-    const boxWidth = widest + padX * 2, boxHeight = lineHeight * 3 + padY * 2 - 4;
-    const boxX = Math.max(2, Math.min(width - boxWidth - 2, anchorX - boxWidth / 2));
-    const boxY = Math.max(2, anchorY - boxHeight - 14);
-    tooltipBg.setAttribute('x', boxX); tooltipBg.setAttribute('y', boxY);
-    tooltipBg.setAttribute('width', boxWidth); tooltipBg.setAttribute('height', boxHeight);
-    [tooltipDate, tooltipReg, tooltipRed].forEach((node, index) => {
-      node.setAttribute('x', boxX + padX);
-      node.setAttribute('y', boxY + padY + 8 + lineHeight * index);
+  const drawGridlines = () => {
+    ticks.forEach(value => {
+      const pos = yFor(value);
+      make('line', { x1: pad.left, y1: pos, x2: width - pad.right, y2: pos, stroke: '#e8efed' });
+      const text = make('text', { x: pad.left - 10, y: pos + 4, 'text-anchor': 'end', fill: '#73817c', 'font-size': 11 });
+      text.textContent = value;
     });
-    tooltip.setAttribute('opacity', 1);
-    chart.appendChild(tooltip); // always paint the tooltip above the data it's describing
-  };
-  const hideTooltip = () => tooltip.setAttribute('opacity', 0);
-
-  const wireHover = (node, row) => {
-    node.setAttribute('tabindex', '0');
-    ['mouseenter', 'mousemove', 'focus'].forEach(evt => node.addEventListener(evt, () => {
-      const cx = Number(node.getAttribute('data-cx')), cy = Number(node.getAttribute('data-cy'));
-      showTooltip(row, cx, cy);
-    }));
-    ['mouseleave', 'blur'].forEach(evt => node.addEventListener(evt, hideTooltip));
-    make('title', {}, node).textContent =
-      `${humanDate(row.day)} — ${FIELD_LABEL.registrations}: ${row.registrations}, ${FIELD_LABEL.redemptions}: ${row.redemptions}`;
   };
 
-  if (values.length <= 2) {
-    // A line "trend" across only one or two points is misleading (it implies a
-    // continuous change that isn't there) — show a compact grouped bar comparison instead.
-    const plotWidth = width - pad.left - pad.right;
-    const groupWidth = Math.min(110, plotWidth / values.length - 30);
-    const barWidth = Math.max(16, groupWidth / 2 - 5);
-    const groupGap = 46;
-    const totalWidth = values.length * groupWidth + (values.length - 1) * groupGap;
+  const makeTooltip = () => {
+    // Hover/focus tooltip built entirely in SVG (attributes, not the "style" attribute)
+    // so it isn't affected by the same CSP style-src restriction noted above.
+    const tooltip = make('g', { opacity: 0 });
+    const tooltipBg = make('rect', { rx: 8, ry: 8, fill: '#001a45' }, tooltip);
+    const tooltipDate = make('text', { 'font-size': 11, fill: '#ffffff', 'font-weight': 700 }, tooltip);
+    const tooltipReg = make('text', { 'font-size': 11, fill: '#5be3cd' }, tooltip);
+    const tooltipRed = make('text', { 'font-size': 11, fill: '#c6b9f7' }, tooltip);
+
+    const showTooltip = (row, anchorX, anchorY) => {
+      tooltipDate.textContent = humanDate(row.day);
+      tooltipReg.textContent = `${FIELD_LABEL.registrations}: ${row.registrations}`;
+      tooltipRed.textContent = `${FIELD_LABEL.redemptions}: ${row.redemptions}`;
+      const lineHeight = 15, padX = 10, padY = 9;
+      const widest = Math.max(...[tooltipDate, tooltipReg, tooltipRed].map(node => (
+        node.getComputedTextLength ? node.getComputedTextLength() : node.textContent.length * 6.5
+      )));
+      const boxWidth = widest + padX * 2, boxHeight = lineHeight * 3 + padY * 2 - 4;
+      const boxX = Math.max(2, Math.min(width - boxWidth - 2, anchorX - boxWidth / 2));
+      const boxY = Math.max(2, anchorY - boxHeight - 14);
+      tooltipBg.setAttribute('x', boxX); tooltipBg.setAttribute('y', boxY);
+      tooltipBg.setAttribute('width', boxWidth); tooltipBg.setAttribute('height', boxHeight);
+      [tooltipDate, tooltipReg, tooltipRed].forEach((node, index) => {
+        node.setAttribute('x', boxX + padX);
+        node.setAttribute('y', boxY + padY + 8 + lineHeight * index);
+      });
+      tooltip.setAttribute('opacity', 1);
+      chart.appendChild(tooltip); // always paint the tooltip above the data it's describing
+    };
+    const hideTooltip = () => tooltip.setAttribute('opacity', 0);
+
+    return (node, row) => {
+      node.setAttribute('tabindex', '0');
+      ['mouseenter', 'mousemove', 'focus'].forEach(evt => node.addEventListener(evt, () => {
+        const cx = Number(node.getAttribute('data-cx')), cy = Number(node.getAttribute('data-cy'));
+        showTooltip(row, cx, cy);
+      }));
+      ['mouseleave', 'blur'].forEach(evt => node.addEventListener(evt, hideTooltip));
+      make('title', {}, node).textContent =
+        `${humanDate(row.day)} — ${FIELD_LABEL.registrations}: ${row.registrations}, ${FIELD_LABEL.redemptions}: ${row.redemptions}`;
+    };
+  };
+
+  const renderBars = wireHover => {
+    // Group width/gap are solved from the plot width itself (not a fixed gap), so any
+    // count up to the "bars" default's 7-date ceiling always fits with no clipping.
+    const n = values.length;
+    const groupGap = Math.max(16, Math.min(46, (plotWidth / n) * 0.35));
+    const groupWidth = Math.min(110, (plotWidth - (n - 1) * groupGap) / n);
+    const barWidth = Math.max(10, groupWidth / 2 - 5);
+    const totalWidth = n * groupWidth + (n - 1) * groupGap;
     const startX = pad.left + Math.max(0, (plotWidth - totalWidth) / 2);
 
     values.forEach((row, index) => {
@@ -135,8 +143,10 @@
       const label = make('text', { x: groupX + groupWidth / 2, y: height - 14, 'text-anchor': 'middle', fill: '#73817c', 'font-size': 11 });
       label.textContent = humanDate(row.day);
     });
-  } else {
-    const xFor = index => pad.left + index * ((width - pad.left - pad.right) / (values.length - 1));
+  };
+
+  const renderLine = wireHover => {
+    const xFor = index => values.length === 1 ? width / 2 : pad.left + index * (plotWidth / (values.length - 1));
     const drawLine = field => {
       make('polyline', {
         points: values.map((row, index) => `${xFor(index)},${yFor(row[field])}`).join(' '),
@@ -157,7 +167,27 @@
       const text = make('text', { x: xFor(index), y: height - 14, 'text-anchor': 'middle', fill: '#73817c', 'font-size': 11 });
       text.textContent = humanDate(row.day);
     });
-  }
+  };
+
+  const RENDERERS = { bars: renderBars, line: renderLine };
+
+  const renderChart = mode => {
+    while (chart.firstChild) chart.removeChild(chart.firstChild);
+    drawGridlines();
+    RENDERERS[mode](makeTooltip());
+    barsBtn.setAttribute('aria-pressed', String(mode === 'bars'));
+    lineBtn.setAttribute('aria-pressed', String(mode === 'line'));
+  };
+
+  // The default (bars up to 7 displayed dates, line beyond) is decided once, server-side,
+  // in app/reporting/service.py's default_chart_mode() -- the single source of truth,
+  // computed from this exact page load's time_series so it can never drift from what's
+  // actually on screen. Same data, same date range, both modes -- switching redraws the
+  // already-embedded `values` in place with no page refetch.
+  let mode = chart.dataset.defaultMode === 'line' ? 'line' : 'bars';
+  renderChart(mode);
+  barsBtn.addEventListener('click', () => { mode = 'bars'; renderChart(mode); });
+  lineBtn.addEventListener('click', () => { mode = 'line'; renderChart(mode); });
 })();
 </script>
 {% endblock %}
