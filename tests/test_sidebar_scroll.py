@@ -50,6 +50,16 @@ def test_side_nav_scroll_container_never_introduces_horizontal_overflow():
     assert "overflow-x:hidden" in side_nav
 
 
+def test_side_nav_keeps_compact_rows_instead_of_stretching_to_fill_the_sidebar():
+    """.side-nav is display:grid with auto-sized rows; CSS Grid's default align-content
+    (normal) behaves as stretch once flex:1 gives the container a definite height taller
+    than its content, which spreads the nav links apart with large gaps. align-content:
+    start packs them at their natural compact size regardless of how much extra space
+    flex:1 gives the container, with any leftover space collecting after the last item."""
+    side_nav = _last_declaration(".side-nav")
+    assert "align-content:start" in side_nav
+
+
 def test_top_and_bottom_sidebar_sections_stay_pinned_outside_the_scroll_area():
     # Top: clinic identity block is a normal (non-flex-grow, non-scrolling) sibling.
     assert ".clinic-identity{" in STYLE_CSS

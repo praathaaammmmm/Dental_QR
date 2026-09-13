@@ -159,3 +159,31 @@ def test_dashboard_embeds_the_server_decided_default_mode_for_the_client_toggle_
     text = dashboard.text
     assert 'data-default-mode="bars"' in text or 'data-default-mode="line"' in text
     assert "chart.dataset.defaultMode === 'line' ? 'line' : 'bars'" in text
+
+
+def test_chart_loading_and_empty_states_are_not_overridden_by_a_display_css_rule(client):
+    """Bug: `loading.hidden = true` (and the SVG's initial `hidden` attribute) never
+    actually hid anything, because .chart-loading{display:flex} and
+    .analytics-chart{display:block} have the same CSS specificity as the browser's
+    default [hidden]{display:none} rule and are declared later, so the author rule always
+    won -- "Loading chart..." stayed visible forever, and an empty chart stayed visible
+    as an empty box. Both must carry an explicit [hidden] override."""
+    stylesheet = client.get("/static/style.css")
+    assert stylesheet.status_code == 200
+    assert ".chart-loading[hidden]{display:none}" in stylesheet.text
+    assert ".analytics-chart[hidden]{display:none}" in stylesheet.text
+
+
+def test_chart_script_hides_loading_unconditionally_and_never_re_shows_it_on_toggle(client):
+    """loading.hidden is set exactly once, at the top of the script, before any chart is
+    drawn -- neither renderChart() nor the Bars/Line click handlers touch `loading` again,
+    so switching modes can never leave stale "Loading chart..." text on screen."""
+    dashboard = client.get("/admin/dashboard")
+    text = dashboard.text
+    assert "loading.hidden = true;" in text
+    render_chart_start = text.index("const renderChart = mode =>")
+    render_chart_body = text[render_chart_start:text.index("};", render_chart_start)]
+    assert "loading" not in render_chart_body
+    bars_click_start = text.index("barsBtn.addEventListener('click'")
+    bars_click_body = text[bars_click_start:text.index(");", bars_click_start)]
+    assert "loading" not in bars_click_body

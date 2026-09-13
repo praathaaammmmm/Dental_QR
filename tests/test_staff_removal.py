@@ -2,7 +2,28 @@ from app.auth import password_hasher
 from app.database import SessionLocal
 from app.models import AuditLog, StaffUser
 from app.routes.auth import _attempts
+from app.time_utils import utc_now
 from tests.test_staff_interface import _create_staff, _login_as_staff
+
+
+def test_staff_row_actions_are_grouped_compactly_and_no_longer_inline_styled(client):
+    """Deactivate/Remove used to be two separate forms joined only by a literal space and
+    an ad hoc `style="display:inline-block"` on each. They must now share one compact,
+    right-aligned action group (styled entirely from style.css, matching the app's CSP)."""
+    staff_id = _create_staff(username="button-layout-staff", password="button-layout-password")
+    listing = client.get("/admin/staff").text
+    group_start = listing.index(f'action="/admin/staff/{staff_id}/toggle"')
+    group_start = listing.rindex('<div class="staff-actions">', 0, group_start)
+    group_end = listing.index("</div>", listing.index(f'action="/admin/staff/{staff_id}/remove"', group_start))
+    group_chunk = listing[group_start:group_end]
+    assert f'action="/admin/staff/{staff_id}/toggle"' in group_chunk
+    assert f'action="/admin/staff/{staff_id}/remove"' in group_chunk
+    assert "style=" not in group_chunk
+
+    stylesheet = client.get("/static/style.css").text
+    assert ".staff-actions{display:flex" in stylesheet
+    assert "justify-content:flex-end" in stylesheet
+    assert "flex-wrap:wrap" in stylesheet
 
 
 def test_staff_page_renders_after_removal_with_mixed_staff_states(client):
@@ -205,5 +226,143 @@ def test_admin_account_cannot_be_removed_via_staff_route(client):
         admin_row = db.get(StaffUser, admin_row_id)
         assert admin_row.active is True
         assert admin_row.removed_at is None
+    finally:
+        db.close()
+
+
+def test_creating_a_removed_username_offers_restore_instead_of_a_duplicate(client):
+    staff_id = _create_staff(username="reusable-username", password="original-password")
+    client.post(f"/admin/staff/{staff_id}/remove")
+
+    response = client.post("/admin/staff", data={
+        "username": "reusable-username", "password": "brand-new-password-123",
+    }, follow_redirects=False)
+    assert response.status_code == 303
+    assert f"restore_id={staff_id}" in response.headers["location"]
+
+    db = SessionLocal()
+    try:
+        assert db.query(StaffUser).filter(StaffUser.username == "reusable-username").count() == 1
+        still_removed = db.get(StaffUser, staff_id)
+        assert still_removed.removed_at is not None
+        assert still_removed.active is False
+    finally:
+        db.close()
+
+    listing = client.get(response.headers["location"]).text
+    assert "Restore staff account" in listing
+    assert "reusable-username" in listing
+    assert f'action="/admin/staff/{staff_id}/restore"' in listing
+
+
+def test_restoring_removed_staff_reactivates_with_new_password_and_login_works(client):
+    staff_id = _create_staff(username="restorable-staff", password="old-password-value")
+    client.post(f"/admin/staff/{staff_id}/remove")
+
+    response = client.post(f"/admin/staff/{staff_id}/restore", data={
+        "password": "brand-new-restored-password",
+    }, follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/admin/staff")
+
+    db = SessionLocal()
+    try:
+        user = db.get(StaffUser, staff_id)
+        assert user.active is True
+        assert user.removed_at is None
+    finally:
+        db.close()
+
+    followed = client.get(response.headers["location"])
+    assert "Staff account restored and access re-enabled." in followed.text
+
+    client.post("/logout")
+    _attempts.clear()
+    login_with_old = client.post("/login", data={
+        "username": "restorable-staff", "password": "old-password-value",
+    }, follow_redirects=False)
+    assert login_with_old.status_code == 200
+    assert "Invalid username or password" in login_with_old.text
+
+    login_with_new = client.post("/login", data={
+        "username": "restorable-staff", "password": "brand-new-restored-password",
+    }, follow_redirects=False)
+    assert login_with_new.status_code == 303
+    assert login_with_new.headers["location"] == "/staff/home"
+
+    client.post("/login", data={"username": "smritiraj-clinic", "password": "test-password"})
+
+
+def test_duplicate_active_username_is_still_rejected_not_offered_restore(client):
+    _create_staff(username="already-active-staff", password="first-password-value")
+
+    response = client.post("/admin/staff", data={
+        "username": "already-active-staff", "password": "second-password-value",
+    }, follow_redirects=False)
+    assert response.status_code == 303
+    assert "restore_id" not in response.headers["location"]
+
+    followed = client.get(response.headers["location"])
+    assert "already in use" in followed.text
+    assert "Restore staff account" not in followed.text
+
+    db = SessionLocal()
+    try:
+        assert db.query(StaffUser).filter(StaffUser.username == "already-active-staff").count() == 1
+    finally:
+        db.close()
+
+
+def test_restore_preserves_prior_audit_history_and_writes_restored_event(client):
+    _login_as_staff(client)
+    client.post("/staff/register", data={
+        "full_name": "Pre-Restore Audit Patient", "mobile": "9888800010",
+        "campaign_id": "1", "offer_id": "1", "beneficiary_category": "CGHS", "consent_given": "true",
+    })
+
+    db = SessionLocal()
+    try:
+        staff_user_id = db.query(StaffUser).filter(StaffUser.username == "staff-user").one().id
+        prior_audit_count = db.query(AuditLog).filter(AuditLog.user == "staff-user").count()
+        assert prior_audit_count > 0
+    finally:
+        db.close()
+
+    client.post("/logout")
+    client.post("/login", data={"username": "smritiraj-clinic", "password": "test-password"})
+    client.post(f"/admin/staff/{staff_user_id}/remove")
+    client.post(f"/admin/staff/{staff_user_id}/restore", data={"password": "post-restore-password-1"})
+
+    db = SessionLocal()
+    try:
+        remaining_audit_count = db.query(AuditLog).filter(AuditLog.user == "staff-user").count()
+        assert remaining_audit_count == prior_audit_count
+        assert db.query(AuditLog).filter(AuditLog.action == "STAFF_ACCOUNT_RESTORED").count() == 1
+        user = db.get(StaffUser, staff_user_id)
+        assert user.active is True
+        assert user.removed_at is None
+    finally:
+        db.close()
+
+
+def test_admin_account_cannot_be_restored_via_staff_route(client):
+    db = SessionLocal()
+    try:
+        admin_row = StaffUser(
+            username="not-a-real-admin-row-2", password_hash=password_hasher.hash("irrelevant-password"),
+            role="admin", active=True, removed_at=utc_now(),
+        )
+        db.add(admin_row)
+        db.commit()
+        admin_row_id = admin_row.id
+    finally:
+        db.close()
+
+    client.post(f"/admin/staff/{admin_row_id}/restore", data={"password": "should-not-apply-12345"})
+
+    db = SessionLocal()
+    try:
+        admin_row = db.get(StaffUser, admin_row_id)
+        assert admin_row.removed_at is not None
     finally:
         db.close()
