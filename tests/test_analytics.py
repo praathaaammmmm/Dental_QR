@@ -172,6 +172,11 @@ def test_chart_loading_and_empty_states_are_not_overridden_by_a_display_css_rule
     assert stylesheet.status_code == 200
     assert ".chart-loading[hidden]{display:none}" in stylesheet.text
     assert ".analytics-chart[hidden]{display:none}" in stylesheet.text
+    # Same bug, same fix, for the Bars/Line toggle buttons: the global `button{display:
+    # inline-block}` reset applies to `#chart-mode-bars`/`#chart-mode-line` too, so without
+    # this explicit override they stayed fully visible (and clickable) on an empty-data
+    # dashboard even after JS set both buttons' `hidden` property to true.
+    assert ".chart-mode-btn[hidden]{display:none}" in stylesheet.text
 
 
 def test_chart_script_hides_loading_unconditionally_and_never_re_shows_it_on_toggle(client):
@@ -187,3 +192,25 @@ def test_chart_script_hides_loading_unconditionally_and_never_re_shows_it_on_tog
     bars_click_start = text.index("barsBtn.addEventListener('click'")
     bars_click_body = text[bars_click_start:text.index(");", bars_click_start)]
     assert "loading" not in bars_click_body
+
+
+def test_chart_svg_visibility_is_toggled_via_the_hidden_attribute_not_the_hidden_property(client):
+    """Bug: `chart` is an <svg> element, and SVGElement's `hidden` IDL property does not
+    reflect back to the `hidden` content attribute the way HTMLElement's does in real
+    browsers -- confirmed live: `chart.hidden = false` left `chart.hasAttribute('hidden')`
+    true, so the `.analytics-chart[hidden]{display:none}` rule (added to make `hidden`
+    actually collapse things) kept the chart collapsed to 0x0 forever, even though every
+    JS variable (`chart.hidden`, `labels.length`, etc.) reported the "shown" state
+    correctly. The SVG must be shown/hidden via explicit attribute calls in both
+    directions; `barsBtn`/`lineBtn`/`empty` are real HTML elements, where the `.hidden`
+    property works as expected."""
+    dashboard = client.get("/admin/dashboard")
+    text = dashboard.text
+    assert "chart.removeAttribute('hidden');" in text
+    assert "chart.setAttribute('hidden', '');" in text
+    assert "chart.hidden = false;" not in text
+    assert "chart.hidden = true;" not in text
+    assert "barsBtn.hidden = false;" in text
+    assert "lineBtn.hidden = false;" in text
+    assert "barsBtn.hidden = true;" in text
+    assert "lineBtn.hidden = true;" in text

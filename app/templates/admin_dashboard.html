@@ -22,9 +22,23 @@
   const barsBtn = document.getElementById('chart-mode-bars');
   const lineBtn = document.getElementById('chart-mode-line');
   const labels = [...new Set([...series.registrations.map(row => row.day), ...series.redemptions.map(row => row.day)])].sort();
+  // `chart` is an <svg>: SVGElement's `hidden` IDL property does not reflect back to the
+  // `hidden` content attribute the way HTMLElement's does, so `chart.hidden = false` left
+  // the attribute in place and the `.analytics-chart[hidden]{display:none}` CSS rule kept
+  // the chart collapsed to 0x0 forever, even though every JS variable (`chart.hidden`,
+  // `labels.length`, etc.) reported the "shown" state correctly. The attribute must be
+  // added/removed explicitly for the SVG; `empty`/`barsBtn`/`lineBtn` are plain HTML
+  // elements, where the `.hidden` property works as expected.
   loading.hidden = true;
-  if (!labels.length) { empty.hidden = false; return; }
-  chart.hidden = false;
+  if (!labels.length) {
+    chart.setAttribute('hidden', '');
+    barsBtn.hidden = true;
+    lineBtn.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  chart.removeAttribute('hidden');
+  empty.hidden = true;
   barsBtn.hidden = false;
   lineBtn.hidden = false;
 
