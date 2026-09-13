@@ -1,4 +1,3 @@
-from datetime import date
 import csv
 from io import StringIO
 from urllib.parse import urlencode
@@ -6,7 +5,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 from ..auth import require_admin
 from ..models import Campaign, Offer
-from ..query_params import optional_int
+from ..query_params import optional_date, optional_int
 from .service import (
     campaign_performance, counts, daily_time_series, dashboard_summary, default_chart_mode,
     delivery_summary, patient_export_rows, registrations_by_category, staff_performance,
@@ -25,8 +24,8 @@ def campaign_report(request: Request, campaign_id: str = Query(""), offer_id: st
         output = StringIO()
         writer = csv.writer(output)
         writer.writerow(["Campaign", "Start date", "End date", "Status", "Issued", "Redeemed", "Expired", "Conversion rate"])
-        start_date = date.fromisoformat(start) if start else None
-        end_date = date.fromisoformat(end) if end else None
+        start_date = optional_date(start)
+        end_date = optional_date(end)
         for campaign in campaign_performance(db, campaign_id, offer_id, start_date, end_date):
             issued, redeemed = campaign["issued"], campaign["redeemed"]
             writer.writerow([campaign["name"], campaign["start_date"], campaign["end_date"], campaign["status"], issued, redeemed, campaign["expired"], f"{(redeemed * 100 / issued) if issued else 0:.1f}%"])
@@ -43,8 +42,8 @@ def dashboard(request: Request, campaign_id: str = Query(""), offer_id: str = Qu
     campaign_id, offer_id = optional_int(campaign_id), optional_int(offer_id)
     db = request.app.state.db()
     try:
-        start_date = date.fromisoformat(start) if start else None
-        end_date = date.fromisoformat(end) if end else None
+        start_date = optional_date(start)
+        end_date = optional_date(end)
         summary = dashboard_summary(db, campaign_id, offer_id, start_date, end_date)
         issued, redeemed, expired = summary["issued"], summary["redeemed"], summary["expired"]
         conversion = round(redeemed * 100 / issued, 1) if issued else 0
@@ -78,8 +77,8 @@ def patient_report(request: Request, campaign_id: str = Query(""), offer_id: str
     campaign_id, offer_id = optional_int(campaign_id), optional_int(offer_id)
     db = request.app.state.db()
     try:
-        start_date = date.fromisoformat(start) if start else None
-        end_date = date.fromisoformat(end) if end else None
+        start_date = optional_date(start)
+        end_date = optional_date(end)
         output = StringIO()
         writer = csv.writer(output)
         writer.writerow(["Patient ID", "Patient", "Mobile", "Email", "Age", "Gender", "Campaign", "Service", "Beneficiary Category", "Registration ID", "Registered", "Expires", "Status", "Redeemed", "Redeemed by"])

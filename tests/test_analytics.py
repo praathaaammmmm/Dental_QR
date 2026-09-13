@@ -214,3 +214,22 @@ def test_chart_svg_visibility_is_toggled_via_the_hidden_attribute_not_the_hidden
     assert "lineBtn.hidden = false;" in text
     assert "barsBtn.hidden = true;" in text
     assert "lineBtn.hidden = true;" in text
+
+
+def test_dashboard_with_malformed_start_date_does_not_500(client):
+    """Bug: date.fromisoformat() was called unguarded on the `start`/`end` query params,
+    so a hand-edited or malformed URL (e.g. /admin/dashboard?start=not-a-date) raised an
+    unhandled ValueError -> bare 500, instead of degrading gracefully like the analogous
+    /staff/patients filter does."""
+    response = client.get("/admin/dashboard?start=not-a-date&end=also-bad")
+    assert response.status_code == 200
+
+
+def test_campaign_report_csv_with_malformed_date_does_not_500(client):
+    response = client.get("/admin/reports/campaigns.csv?start=not-a-date")
+    assert response.status_code == 200
+
+
+def test_patient_report_csv_with_malformed_date_does_not_500(client):
+    response = client.get("/admin/reports/patients.csv?end=not-a-date")
+    assert response.status_code == 200
