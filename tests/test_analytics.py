@@ -1,11 +1,42 @@
-from datetime import timedelta
+import json
+from datetime import date, datetime, timedelta
 
 from app.audit_service import audit
 from app.auth import password_hasher
 from app.database import SessionLocal
 from app.models import PatientOffer, StaffUser
-from app.reporting.service import daily_time_series, default_chart_mode, staff_performance
+from app.reporting import routes as reporting_routes
+from app.reporting.service import _iso_day, daily_time_series, default_chart_mode, staff_performance
 from app.time_utils import utc_now
+
+
+class _FakeQueryResult:
+    """Stands in for SQLAlchemy's ``Result``: only the ``.mappings().all()`` chain
+    ``daily_time_series`` actually calls."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def mappings(self):
+        return self
+
+    def all(self):
+        return self._rows
+
+
+class _FakePostgresDB:
+    """Stands in for a PostgreSQL-backed ``Session``. Real PostgreSQL returns
+    ``datetime.date``/``datetime.datetime`` objects from ``func.date(...)`` grouping,
+    while SQLite (the test database everywhere else in this suite) returns plain
+    strings -- this fake reproduces the PostgreSQL shape so the normalization in
+    ``daily_time_series``/``_iso_day`` is actually exercised, not merely exercised
+    against strings that were already JSON-safe."""
+
+    def __init__(self, registration_rows, redemption_rows):
+        self._results = [registration_rows, redemption_rows]
+
+    def execute(self, _statement):
+        return _FakeQueryResult(self._results.pop(0))
 
 
 def _register(client, name: str, mobile: str):
@@ -40,6 +71,79 @@ def test_time_series_uses_grouped_registration_and_redemption_dates(client):
         assert redemptions[str(now.date())] == 1
     finally:
         db.close()
+
+
+def test_daily_time_series_normalizes_postgres_date_objects_to_iso_strings():
+    """Bug: PostgreSQL returns grouped DATE values as ``datetime.date`` objects, which
+    Jinja's ``tojson`` filter cannot serialize (`TypeError: Object of type date is not
+    JSON serializable`), while SQLite returns plain strings -- masking the bug in every
+    SQLite-backed test. This feeds ``daily_time_series`` real ``date`` objects, as
+    PostgreSQL would, and asserts both series come back as JSON-safe ISO strings."""
+    db = _FakePostgresDB(
+        registration_rows=[
+            {"day": date(2026, 1, 1), "count": 2},
+            {"day": date(2026, 1, 2), "count": 1},
+        ],
+        redemption_rows=[{"day": date(2026, 1, 2), "count": 1}],
+    )
+    series = daily_time_series(db)
+    assert series["registrations"] == [
+        {"day": "2026-01-01", "count": 2},
+        {"day": "2026-01-02", "count": 1},
+    ]
+    assert series["redemptions"] == [{"day": "2026-01-02", "count": 1}]
+    json.dumps(series)  # must not raise TypeError: Object of type date is not JSON serializable
+
+
+def test_daily_time_series_normalizes_datetime_objects_to_iso_date_strings():
+    """A grouped ``day`` value could in principle come back as a full ``datetime`` (not
+    just a ``date``); it must still collapse to the same ISO YYYY-MM-DD string."""
+    db = _FakePostgresDB(
+        registration_rows=[{"day": datetime(2026, 1, 1, 13, 45, 30), "count": 1}],
+        redemption_rows=[],
+    )
+    series = daily_time_series(db)
+    assert series["registrations"] == [{"day": "2026-01-01", "count": 1}]
+    assert series["redemptions"] == []
+    json.dumps(series)
+
+
+def test_daily_time_series_leaves_string_days_from_sqlite_unchanged():
+    db = _FakePostgresDB(
+        registration_rows=[{"day": "2026-01-01", "count": 1}],
+        redemption_rows=[{"day": "2026-01-02", "count": 1}],
+    )
+    series = daily_time_series(db)
+    assert series["registrations"] == [{"day": "2026-01-01", "count": 1}]
+    assert series["redemptions"] == [{"day": "2026-01-02", "count": 1}]
+    json.dumps(series)
+
+
+def test_iso_day_helper_handles_date_datetime_and_string():
+    assert _iso_day(date(2026, 3, 4)) == "2026-03-04"
+    assert _iso_day(datetime(2026, 3, 4, 9, 30)) == "2026-03-04"
+    assert _iso_day("2026-03-04") == "2026-03-04"
+
+
+def test_admin_dashboard_renders_with_postgres_style_date_grouped_rows(client, monkeypatch):
+    """End-to-end regression for the production 500: even when the underlying query
+    returns ``datetime.date`` objects (the PostgreSQL shape), the dashboard route must
+    still render, because normalization happens at the service boundary before the
+    template ever calls ``tojson`` on the data."""
+    real_daily_time_series = daily_time_series
+
+    def _daily_time_series_with_postgres_style_rows(db, campaign_id=None, offer_id=None, start=None, end=None):
+        fake_db = _FakePostgresDB(
+            registration_rows=[{"day": date(2026, 1, 1), "count": 3}],
+            redemption_rows=[{"day": date(2026, 1, 2), "count": 1}],
+        )
+        return real_daily_time_series(fake_db, campaign_id, offer_id, start, end)
+
+    monkeypatch.setattr(reporting_routes, "daily_time_series", _daily_time_series_with_postgres_style_rows)
+    response = client.get("/admin/dashboard")
+    assert response.status_code == 200
+    assert '"day": "2026-01-01"' in response.text
+    assert '"day": "2026-01-02"' in response.text
 
 
 def test_staff_performance_aggregates_audit_events_by_username(client):

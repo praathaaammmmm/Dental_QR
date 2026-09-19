@@ -1,5 +1,5 @@
 """Aggregate, admin-only reporting queries for the CRM dashboard."""
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
@@ -54,6 +54,22 @@ def delivery_summary(db: Session, campaign_id=None, offer_id=None, start: date |
     return dict(row)
 
 
+def _iso_day(value) -> str:
+    """Normalize a grouped ``day`` value to a JSON-safe ISO ``YYYY-MM-DD`` string.
+
+    ``func.date(...)`` grouping returns ``datetime.date`` on PostgreSQL but a plain
+    string on SQLite, and in principle could hand back a ``datetime`` too -- all three
+    must collapse to the same ISO string so ``tojson`` in the dashboard template never
+    sees a non-JSON-serializable value, and so day labels compare/sort identically
+    across backends.
+    """
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
+
+
 def daily_time_series(db: Session, campaign_id=None, offer_id=None, start: date | None = None, end: date | None = None) -> dict:
     registration_conditions = _offer_conditions(campaign_id, offer_id, start, end, PatientOffer.created_at)
     redemption_conditions = _offer_conditions(campaign_id, offer_id, start, end, PatientOffer.redeemed_at)
@@ -64,7 +80,10 @@ def daily_time_series(db: Session, campaign_id=None, offer_id=None, start: date 
     redemptions = db.execute(select(
         func.date(PatientOffer.redeemed_at).label("day"), func.count(PatientOffer.id).label("count"),
     ).where(*redemption_conditions).group_by(func.date(PatientOffer.redeemed_at)).order_by(func.date(PatientOffer.redeemed_at))).mappings().all()
-    return {"registrations": [dict(row) for row in registrations], "redemptions": [dict(row) for row in redemptions]}
+    return {
+        "registrations": [{"day": _iso_day(row["day"]), "count": row["count"]} for row in registrations],
+        "redemptions": [{"day": _iso_day(row["day"]), "count": row["count"]} for row in redemptions],
+    }
 
 
 def default_chart_mode(time_series: dict) -> str:
