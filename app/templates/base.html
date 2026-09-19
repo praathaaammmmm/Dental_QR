@@ -6,7 +6,7 @@
   <title>{% block title %}Smriti Raj Dentistry{% endblock %} · Dentistry Ops</title>
   <link rel="icon" type="image/png" href="/static/img/smriti-raj-dentistry.png">
   <link rel="stylesheet" href="/static/style.css">
-  {% if not request.session.get('user') %}<link rel="stylesheet" href="/static/cursor.css">{% endif %}
+  <link rel="stylesheet" href="/static/cursor.css">
 </head>
 <body class="{% if request.session.get('user') %}portal-body{% else %}login-body{% endif %}">
 {% if request.session.get("user") %}
@@ -21,7 +21,7 @@
   {% if request.query_params.get("message") %}<div class="notice">{{ request.query_params.get("message") }}</div>{% endif %}
   {% block content %}{% endblock %}
 </main>
-{% if not request.session.get('user') %}<script src="/static/cursor.js"></script>{% endif %}
+<script src="/static/cursor.js"></script>
 <script src="/static/portal.js"></script>
 {% block scripts %}{% endblock %}
 </body>
